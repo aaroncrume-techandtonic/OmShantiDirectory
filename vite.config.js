@@ -1,13 +1,84 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { capturePaypalOrder, createPaypalOrder } from './api/paypal/_paypal.js'
+
+function sendJson(res, statusCode, payload) {
+  res.statusCode = statusCode
+  res.setHeader('Content-Type', 'application/json')
+  res.end(JSON.stringify(payload))
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+
+    req.on('data', (chunk) => {
+      chunks.push(chunk)
+    })
+
+    req.on('end', () => {
+      if (chunks.length === 0) {
+        resolve({})
+        return
+      }
+
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+      } catch (error) {
+        reject(error)
+      }
+    })
+
+    req.on('error', reject)
+  })
+}
+
+function paypalDevApiPlugin() {
+  return {
+    name: 'paypal-dev-api',
+    configureServer(server) {
+      server.middlewares.use('/api/paypal/create-order', async (req, res, next) => {
+        if (req.method !== 'POST') {
+          return next()
+        }
+
+        try {
+          const order = await createPaypalOrder()
+          return sendJson(res, 200, { id: order.id, status: order.status })
+        } catch (error) {
+          console.error('PayPal create order error:', error)
+          return sendJson(res, 500, { error: error.message || 'Failed to create PayPal order.' })
+        }
+      })
+
+      server.middlewares.use('/api/paypal/capture-order', async (req, res, next) => {
+        if (req.method !== 'POST') {
+          return next()
+        }
+
+        try {
+          const body = await readRequestBody(req)
+          const order = await capturePaypalOrder(body.orderId)
+          return sendJson(res, 200, { order })
+        } catch (error) {
+          console.error('PayPal capture order error:', error)
+          return sendJson(res, 500, { error: error.message || 'Failed to capture PayPal order.' })
+        }
+      })
+    },
+  }
+}
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
+export default defineConfig(({ mode }) => {
+  Object.assign(process.env, loadEnv(mode, process.cwd(), ''))
+
+  return {
+    plugins: [react(), paypalDevApiPlugin()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
           const normalizedId = id.replace(/\\/g, '/')
 
           const parseConceptNumber = (conceptPath) => {
@@ -124,8 +195,9 @@ export default defineConfig({
 
             return 'app-concepts'
           }
+          },
         },
       },
     },
-  },
+  }
 })

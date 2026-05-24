@@ -2,42 +2,107 @@ import React, { useEffect, useState } from 'react';
 import { Heart, Lock, Check } from 'lucide-react';
 
 export default function PaymentGate({ onPurchaseComplete }) {
+  const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Initialize PayPal buttons when component mounts
-    if (window.paypal) {
-      initializePayPalButtons();
+    if (!paypalClientId) {
+      setError('PayPal is not configured. Add VITE_PAYPAL_CLIENT_ID to your environment.');
+      return;
     }
-  }, []);
+
+    const container = document.getElementById('paypal-button-container');
+    if (!container) {
+      return;
+    }
+
+    const handleLoad = () => {
+      initializePayPalButtons();
+    };
+
+    const handleError = () => {
+      setError('Failed to load PayPal. Check VITE_PAYPAL_CLIENT_ID and refresh the page.');
+    };
+
+    if (window.paypal) {
+      handleLoad();
+      return;
+    }
+
+    let script = document.querySelector('script[data-paypal-sdk="true"]');
+
+    if (!script) {
+      script = document.createElement('script');
+      script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&components=buttons&currency=USD&intent=capture`;
+      script.async = true;
+      script.dataset.paypalSdk = 'true';
+      document.body.appendChild(script);
+    }
+
+    script.addEventListener('load', handleLoad);
+    script.addEventListener('error', handleError);
+
+    return () => {
+      script.removeEventListener('load', handleLoad);
+      script.removeEventListener('error', handleError);
+    };
+  }, [paypalClientId]);
 
   const initializePayPalButtons = () => {
+    const container = document.getElementById('paypal-button-container');
+    if (!container || container.dataset.paypalRendered === 'true' || !window.paypal) {
+      return;
+    }
+
+    container.dataset.paypalRendered = 'true';
+
     window.paypal
       .Buttons({
         style: {
           layout: 'vertical',
           color: 'gold',
           shape: 'pill',
-          label: 'subscribe',
+          label: 'paypal',
         },
-        createOrder: (data, actions) => {
-          return actions.order.create({
-            purchase_units: [
-              {
-                amount: {
-                  currency_code: 'USD',
-                  value: '19.99',
-                },
-                description: 'Om Shanti Directory - Lifetime Membership',
-              },
-            ],
+        createOrder: async () => {
+          setError('');
+
+          const response = await fetch('/api/paypal/create-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
           });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.id) {
+            throw new Error(data.error || 'Failed to create PayPal order.');
+          }
+
+          return data.id;
         },
-        onApprove: async (data, actions) => {
+        onApprove: async (data) => {
           setIsProcessing(true);
+          setError('');
+
           try {
-            const order = await actions.order.capture();
+            const response = await fetch('/api/paypal/capture-order', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ orderId: data.orderID }),
+            });
+
+            const payload = await response.json();
+
+            if (!response.ok || !payload.order) {
+              throw new Error(payload.error || 'Failed to verify PayPal payment.');
+            }
+
+            const order = payload.order;
             console.log('Order captured:', order);
 
             // Store purchase info in localStorage
@@ -53,7 +118,7 @@ export default function PaymentGate({ onPurchaseComplete }) {
             onPurchaseComplete();
           } catch (err) {
             console.error('Error capturing order:', err);
-            setError('Payment processing failed. Please try again.');
+            setError(err.message || 'Payment processing failed. Please try again.');
             setIsProcessing(false);
           }
         },
@@ -69,6 +134,7 @@ export default function PaymentGate({ onPurchaseComplete }) {
       })
       .render('#paypal-button-container')
       .catch((err) => {
+        container.dataset.paypalRendered = 'false';
         console.error('Error rendering PayPal buttons:', err);
         setError('Failed to load PayPal. Please refresh the page.');
       });

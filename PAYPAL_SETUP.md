@@ -3,8 +3,10 @@
 ## Current Status
 ✅ Payment gate implemented and live at `http://localhost:5173/`  
 ✅ UI complete with $19.99 one-time lifetime membership  
-✅ localStorage-based membership tracking  
-⚠️ **NEXT STEP:** Connect your PayPal account
+✅ server-side PayPal order creation and capture  
+✅ localStorage membership persistence after verified capture  
+✅ PayPal SDK now loads from `VITE_PAYPAL_CLIENT_ID`  
+⚠️ **NEXT STEP:** Add your PayPal credentials to a local env file
 
 ## Setup Instructions
 
@@ -20,20 +22,26 @@
 4. Click on the app name to reveal your **Client ID**
 5. Copy the Client ID (looks like: `AVBr_...`)
 
-### Step 3: Update index.html
-Replace `YOUR_PAYPAL_CLIENT_ID` in `index.html` line 8:
+### Step 3: Create a local env file
 
-**Before:**
-```html
-<script src="https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID"></script>
+Copy the example file:
+
+```bash
+copy .env.example .env.local
 ```
 
-**After:**
-```html
-<script src="https://www.paypal.com/sdk/js?client-id=AVBr_YOUR_ACTUAL_CLIENT_ID_HERE"></script>
+### Step 4: Add your PayPal credentials
+
+Set these values in `.env.local`:
+
+```env
+VITE_PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_SECRET=YOUR_PAYPAL_CLIENT_SECRET
+PAYPAL_ENV=sandbox
 ```
 
-### Step 4: Test Payment (Sandbox Mode)
+### Step 5: Test Payment (Sandbox Mode)
 1. Reload `http://localhost:5173/`
 2. Click the PayPal button
 3. Use PayPal sandbox test account:
@@ -47,10 +55,12 @@ Replace `YOUR_PAYPAL_CLIENT_ID` in `index.html` line 8:
 **Purchase Flow:**
 1. User sees paywall with $19.99 price
 2. Clicks PayPal button
-3. PayPal popup opens
-4. User completes payment
-5. Order is captured and stored in localStorage
-6. App unlocks with full access to all 28 infusions
+3. App requests a server-created PayPal order from `/api/paypal/create-order`
+4. PayPal popup opens
+5. User completes payment
+6. App sends the PayPal order ID to `/api/paypal/capture-order`
+7. Server captures the order with PayPal and returns the verified result
+8. App stores verified membership data in localStorage and unlocks access
 
 **Membership Persistence:**
 - Purchase data stored in `localStorage['omShantiMembership']`
@@ -63,7 +73,7 @@ Replace `YOUR_PAYPAL_CLIENT_ID` in `index.html` line 8:
 Before going live:
 - [ ] Switch from **Sandbox** to **Live** in PayPal Dashboard
 - [ ] Get Live Client ID (different from Sandbox)
-- [ ] Update `index.html` with Live Client ID
+- [ ] Update `.env.local` with the Live Client ID
 - [ ] Set `$19.99` price to your desired amount (in PaymentGate.jsx, line 59)
 - [ ] Implement **server-side verification** (currently client-side only)
 - [ ] Add order confirmation email system
@@ -73,10 +83,10 @@ Before going live:
 
 ## Current Limitations (Sandbox/MVP)
 
-🔒 **Client-Side Only:**
-- Orders verified via localStorage only
-- No backend validation
-- Can be bypassed (for testing)
+🔒 **Current Boundaries:**
+- Membership persistence still uses localStorage on the client
+- No database-backed entitlement recovery yet
+- No webhook reconciliation yet
 
 ✅ **Good For:**
 - Development & testing
@@ -84,16 +94,16 @@ Before going live:
 - Learning
 
 ❌ **Not Recommended For Production:**
-- Security risk without server validation
 - No order history tracking
-- No payment reconciliation
+- No webhook-based reconciliation
+- No account recovery if browser storage is lost
 
 ## Suggested Production Upgrades
 
-1. **Add Backend Verification:**
-   - Store orders in database
-   - Verify PayPal transaction ID on backend
-   - Issue authentication token
+1. **Persist Entitlements Server-Side:**
+   - Store verified orders in a database
+   - Bind access to a user identity or email
+   - Issue a recoverable membership record
 
 2. **Add Admin Panel:**
    - View all purchases
@@ -109,6 +119,12 @@ Before going live:
    - Allow users to download license
    - Account portal for existing members
    - Annual vs lifetime options
+
+## Hosting Notes
+
+- Local development works through Vite middleware on `/api/paypal/*`.
+- Production requires a platform that serves the `api/` directory as server-side functions.
+- The included API handlers are compatible with Vercel-style serverless routes.
 
 ## Support Resources
 

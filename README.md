@@ -35,6 +35,21 @@ npm install
 git lfs pull
 ```
 
+Create a local env file before using the payment flow:
+
+```bash
+copy .env.example .env.local
+```
+
+Then set these values in `.env.local`:
+
+```env
+VITE_PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_SECRET=YOUR_PAYPAL_CLIENT_SECRET
+PAYPAL_ENV=sandbox
+```
+
 ### Run locally
 
 ```bash
@@ -71,14 +86,16 @@ npm run preview
 
 ## Payment caveat
 
-The current membership flow is client-side. A successful PayPal approval stores purchase details in `localStorage`, which is enough for demo and controlled deployment use, but not enough for hardened production access control.
+The PayPal flow now creates and captures orders on the server side. The browser only loads the PayPal SDK and receives the verified order result after the backend capture succeeds. Membership access is still persisted locally in `localStorage` after the verified capture response returns.
+
+Local development serves the PayPal API routes through Vite middleware. Production needs a host that serves the `api/` functions, such as Vercel.
 
 Before treating this as a production payment system, add:
 
-- server-side payment verification
 - persistent purchase records
 - membership recovery or account binding
 - operational refund and support workflows
+- webhook handling for asynchronous payment state changes
 
 Additional PayPal notes are in `PAYPAL_SETUP.md`.
 
