@@ -1,0 +1,5 @@
+Optional cinematic background asset path for Module 3 screens:
+
+/videos/earthing-mirror.mp4
+
+If this file is absent, Module 3 pages automatically fall back to an amber-earth gradient atmosphere.
