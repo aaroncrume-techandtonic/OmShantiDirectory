@@ -1,7 +1,26 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
 const PAYPAL_API_BASE = {
   sandbox: 'https://api-m.sandbox.paypal.com',
   live: 'https://api-m.paypal.com',
 };
+
+function asBase64Url(value) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function fromBase64Url(value) {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = normalized.length % 4;
+  const padded = padding ? `${normalized}${'='.repeat(4 - padding)}` : normalized;
+  return Buffer.from(padded, 'base64').toString('utf8');
+}
 
 function getRequiredEnv(name, fallback) {
   const value = process.env[name] || fallback;
@@ -24,6 +43,105 @@ export function getPaypalConfig() {
     apiBase: PAYPAL_API_BASE[env],
     env,
   };
+}
+
+export function getMembershipSecret() {
+  return getRequiredEnv('MEMBERSHIP_SESSION_SECRET', process.env.PAYPAL_CLIENT_SECRET);
+}
+
+export function parseCookies(req) {
+  const cookieHeader = req.headers?.cookie || '';
+
+  return cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, cookie) => {
+      const index = cookie.indexOf('=');
+      if (index === -1) {
+        return acc;
+      }
+
+      const key = cookie.slice(0, index).trim();
+      const value = cookie.slice(index + 1).trim();
+      acc[key] = decodeURIComponent(value);
+      return acc;
+    }, {});
+}
+
+export function createMembershipSession(payload) {
+  const secret = getMembershipSecret();
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiresAt = issuedAt + 60 * 60 * 24 * 365;
+  const tokenPayload = {
+    ...payload,
+    iat: issuedAt,
+    exp: expiresAt,
+  };
+
+  const encodedHeader = asBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const encodedPayload = asBase64Url(JSON.stringify(tokenPayload));
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+  const signature = asBase64Url(
+    crypto.createHmac('sha256', secret).update(unsignedToken).digest(),
+  );
+
+  return `${unsignedToken}.${signature}`;
+}
+
+export function verifyMembershipSession(token) {
+  if (!token) {
+    return null;
+  }
+
+  const [encodedHeader, encodedPayload, signature] = token.split('.');
+  if (!encodedHeader || !encodedPayload || !signature) {
+    return null;
+  }
+
+  const secret = getMembershipSecret();
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+  const expectedSignature = asBase64Url(
+    crypto.createHmac('sha256', secret).update(unsignedToken).digest(),
+  );
+
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  if (signatureBuffer.length !== expectedBuffer.length) {
+    return null;
+  }
+
+  const isValid = crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+
+  if (!isValid) {
+    return null;
+  }
+
+  const payload = JSON.parse(fromBase64Url(encodedPayload));
+  const now = Math.floor(Date.now() / 1000);
+
+  if (!payload.exp || payload.exp < now) {
+    return null;
+  }
+
+  return payload;
+}
+
+export function setMembershipCookie(res, token) {
+  const cookie = `om_shanti_membership=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
+
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Set-Cookie', cookie);
+  }
+}
+
+export function clearMembershipCookie(res) {
+  const cookie = 'om_shanti_membership=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Set-Cookie', cookie);
+  }
 }
 
 export async function getPaypalAccessToken() {
@@ -68,7 +186,144 @@ export async function readJsonBody(req) {
 }
 
 export function sendJson(res, statusCode, payload) {
-  res.status(statusCode).json(payload);
+  if (typeof res.status === 'function' && typeof res.json === 'function') {
+    res.status(statusCode).json(payload);
+    return;
+  }
+
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(payload));
+}
+
+function getStoragePath() {
+  const configuredPath = process.env.PAYMENTS_STORE_FILE;
+  if (configuredPath) {
+    return configuredPath;
+  }
+
+  if (process.env.VERCEL) {
+    return '/tmp/omshanti-payments.json';
+  }
+
+  return `${process.cwd()}/.payments-store.json`;
+}
+
+function readPaymentStore() {
+  const filePath = getStoragePath();
+
+  if (!fs.existsSync(filePath)) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function writePaymentStore(store) {
+  const filePath = getStoragePath();
+  const directory = path.dirname(filePath);
+
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+
+  fs.writeFileSync(filePath, JSON.stringify(store, null, 2), 'utf8');
+}
+
+function normalizeOrderRecord(order, source) {
+  const capture = order.purchase_units?.[0]?.payments?.captures?.[0];
+
+  return {
+    orderId: order.id,
+    status: order.status,
+    payerEmail: order.payer?.email_address || null,
+    payerId: order.payer?.payer_id || null,
+    captureId: capture?.id || null,
+    amount: capture?.amount?.value || order.purchase_units?.[0]?.amount?.value || null,
+    currency: capture?.amount?.currency_code || order.purchase_units?.[0]?.amount?.currency_code || null,
+    source,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function savePaymentRecord(order, source = 'capture') {
+  const store = readPaymentStore();
+  const record = normalizeOrderRecord(order, source);
+  store[record.orderId] = {
+    ...(store[record.orderId] || {}),
+    ...record,
+    raw: order,
+  };
+  writePaymentStore(store);
+  return store[record.orderId];
+}
+
+export function getPaymentRecord(orderId) {
+  if (!orderId) {
+    return null;
+  }
+
+  const store = readPaymentStore();
+  return store[orderId] || null;
+}
+
+export async function verifyWebhookSignature(req, body) {
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+  if (!webhookId) {
+    return { verified: false, skipped: true, reason: 'PAYPAL_WEBHOOK_ID not set' };
+  }
+
+  const headers = req.headers || {};
+  const transmissionId = headers['paypal-transmission-id'];
+  const transmissionTime = headers['paypal-transmission-time'];
+  const transmissionSig = headers['paypal-transmission-sig'];
+  const certUrl = headers['paypal-cert-url'];
+  const authAlgo = headers['paypal-auth-algo'];
+
+  if (!transmissionId || !transmissionTime || !transmissionSig || !certUrl || !authAlgo) {
+    throw new Error('Missing PayPal webhook signature headers.');
+  }
+
+  const { accessToken, apiBase } = await getPaypalAccessToken();
+  const response = await fetch(`${apiBase}/v1/notifications/verify-webhook-signature`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      auth_algo: authAlgo,
+      cert_url: certUrl,
+      transmission_id: transmissionId,
+      transmission_sig: transmissionSig,
+      transmission_time: transmissionTime,
+      webhook_id: webhookId,
+      webhook_event: body,
+    }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(payload.message || 'Failed to verify PayPal webhook signature.');
+  }
+
+  return {
+    verified: payload.verification_status === 'SUCCESS',
+    skipped: false,
+  };
+}
+
+export function extractOrderIdFromWebhook(body) {
+  return (
+    body?.resource?.supplementary_data?.related_ids?.order_id
+    || body?.resource?.id
+    || null
+  );
 }
 
 export async function createPaypalOrder() {

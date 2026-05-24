@@ -4,7 +4,7 @@
 ✅ Payment gate implemented and live at `http://localhost:5173/`  
 ✅ UI complete with $19.99 one-time lifetime membership  
 ✅ server-side PayPal order creation and capture  
-✅ localStorage membership persistence after verified capture  
+✅ server-issued HttpOnly membership session after verified capture  
 ✅ PayPal SDK now loads from `VITE_PAYPAL_CLIENT_ID`  
 ⚠️ **NEXT STEP:** Add your PayPal credentials to a local env file
 
@@ -39,6 +39,9 @@ VITE_PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
 PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
 PAYPAL_CLIENT_SECRET=YOUR_PAYPAL_CLIENT_SECRET
 PAYPAL_ENV=sandbox
+MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
+PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
+PAYMENTS_STORE_FILE=.payments-store.json
 ```
 
 ### Step 5: Test Payment (Sandbox Mode)
@@ -60,13 +63,13 @@ PAYPAL_ENV=sandbox
 5. User completes payment
 6. App sends the PayPal order ID to `/api/paypal/capture-order`
 7. Server captures the order with PayPal and returns the verified result
-8. App stores verified membership data in localStorage and unlocks access
+8. Server sets a signed `om_shanti_membership` HttpOnly cookie
+9. App reads `/api/membership/session` and unlocks access when active
 
 **Membership Persistence:**
-- Purchase data stored in `localStorage['omShantiMembership']`
-- Contains: `purchaseDate`, `orderId`, `status`, `amount`
-- Persists across browser sessions
-- Clears only if user clears browser data
+- Server issues a signed session cookie named `om_shanti_membership`
+- App checks `/api/membership/session` on load
+- Payment records are written to the configured store file (`PAYMENTS_STORE_FILE`)
 
 ## Production Checklist
 
@@ -75,7 +78,7 @@ Before going live:
 - [ ] Get Live Client ID (different from Sandbox)
 - [ ] Update `.env.local` with the Live Client ID
 - [ ] Set `$19.99` price to your desired amount (in PaymentGate.jsx, line 59)
-- [ ] Implement **server-side verification** (currently client-side only)
+- [ ] Configure `PAYPAL_WEBHOOK_ID` and enable webhook verification
 - [ ] Add order confirmation email system
 - [ ] Set up refund policy
 - [ ] Consider database to track purchases
@@ -84,9 +87,9 @@ Before going live:
 ## Current Limitations (Sandbox/MVP)
 
 🔒 **Current Boundaries:**
-- Membership persistence still uses localStorage on the client
-- No database-backed entitlement recovery yet
-- No webhook reconciliation yet
+- Local file-backed payment store is not a managed production database
+- Entitlements are session-cookie based but not yet tied to an account system
+- Webhook verification is skipped when `PAYPAL_WEBHOOK_ID` is not configured
 
 ✅ **Good For:**
 - Development & testing
@@ -94,9 +97,9 @@ Before going live:
 - Learning
 
 ❌ **Not Recommended For Production:**
-- No order history tracking
-- No webhook-based reconciliation
-- No account recovery if browser storage is lost
+- Local file storage is ephemeral on most serverless platforms
+- No account recovery without user identity linkage
+- Incomplete reconciliation if webhooks are not configured and verified
 
 ## Suggested Production Upgrades
 
@@ -105,17 +108,22 @@ Before going live:
    - Bind access to a user identity or email
    - Issue a recoverable membership record
 
-2. **Add Admin Panel:**
+2. **Enable Verified Webhooks:**
+   - Configure `PAYPAL_WEBHOOK_ID`
+   - Subscribe to capture/refund events in PayPal
+   - Sync entitlement status on asynchronous events
+
+3. **Add Admin Panel:**
    - View all purchases
    - Process refunds
    - Track revenue
 
-3. **Add Email Confirmation:**
+4. **Add Email Confirmation:**
    - Send receipt after purchase
    - Include license key/access token
    - Allow password reset
 
-4. **Consider Membership Management:**
+5. **Consider Membership Management:**
    - Allow users to download license
    - Account portal for existing members
    - Annual vs lifetime options

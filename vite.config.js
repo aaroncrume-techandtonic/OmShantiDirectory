@@ -1,6 +1,57 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { capturePaypalOrder, createPaypalOrder } from './api/paypal/_paypal.js'
+import {
+  capturePaypalOrder,
+  clearMembershipCookie,
+  createMembershipSession,
+  createPaypalOrder,
+  extractOrderIdFromWebhook,
+  getPaymentRecord,
+  parseCookies,
+  savePaymentRecord,
+  verifyWebhookSignature,
+  verifyMembershipSession,
+} from './api/paypal/_paypal.js'
+
+const TRACKED_WEBHOOK_EVENTS = new Set([
+  'PAYMENT.CAPTURE.COMPLETED',
+  'PAYMENT.CAPTURE.DENIED',
+  'PAYMENT.CAPTURE.PENDING',
+  'PAYMENT.CAPTURE.REFUNDED',
+  'PAYMENT.CAPTURE.REVERSED',
+])
+
+function mapWebhookToOrderShape(body, existingRecord) {
+  const resource = body.resource || {}
+
+  return {
+    id: extractOrderIdFromWebhook(body),
+    status: resource.status || existingRecord?.status || body.event_type || 'UNKNOWN',
+    payer: {
+      email_address: existingRecord?.payerEmail || null,
+      payer_id: existingRecord?.payerId || null,
+    },
+    purchase_units: [
+      {
+        amount: {
+          currency_code: resource.amount?.currency_code || existingRecord?.currency || null,
+          value: resource.amount?.value || existingRecord?.amount || null,
+        },
+        payments: {
+          captures: [
+            {
+              id: resource.id || existingRecord?.captureId || null,
+              amount: {
+                currency_code: resource.amount?.currency_code || existingRecord?.currency || null,
+                value: resource.amount?.value || existingRecord?.amount || null,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  }
+}
 
 function sendJson(res, statusCode, payload) {
   res.statusCode = statusCode
@@ -44,6 +95,7 @@ function paypalDevApiPlugin() {
 
         try {
           const order = await createPaypalOrder()
+          savePaymentRecord(order, 'create')
           return sendJson(res, 200, { id: order.id, status: order.status })
         } catch (error) {
           console.error('PayPal create order error:', error)
@@ -59,10 +111,95 @@ function paypalDevApiPlugin() {
         try {
           const body = await readRequestBody(req)
           const order = await capturePaypalOrder(body.orderId)
+          const record = savePaymentRecord(order, 'capture')
+          const sessionToken = createMembershipSession({
+            orderId: record.orderId,
+            payerId: record.payerId,
+            payerEmail: record.payerEmail,
+            status: record.status,
+          })
+          res.setHeader('Set-Cookie', `om_shanti_membership=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`)
           return sendJson(res, 200, { order })
         } catch (error) {
           console.error('PayPal capture order error:', error)
           return sendJson(res, 500, { error: error.message || 'Failed to capture PayPal order.' })
+        }
+      })
+
+      server.middlewares.use('/api/membership/session', async (req, res, next) => {
+        if (req.method === 'GET') {
+          try {
+            const cookies = parseCookies(req)
+            const session = verifyMembershipSession(cookies.om_shanti_membership)
+
+            if (!session) {
+              return sendJson(res, 200, { active: false })
+            }
+
+            return sendJson(res, 200, {
+              active: true,
+              membership: {
+                orderId: session.orderId || null,
+                payerEmail: session.payerEmail || null,
+                status: session.status || 'COMPLETED',
+              },
+            })
+          } catch (error) {
+            console.error('Membership session read error:', error)
+            return sendJson(res, 500, { error: 'Failed to read membership session.' })
+          }
+        }
+
+        if (req.method === 'DELETE') {
+          clearMembershipCookie(res)
+          return sendJson(res, 200, { active: false })
+        }
+
+        return next()
+      })
+
+      server.middlewares.use('/api/paypal/webhook', async (req, res, next) => {
+        if (req.method !== 'POST') {
+          return next()
+        }
+
+        try {
+          const body = await readRequestBody(req)
+          const signature = await verifyWebhookSignature(req, body)
+
+          if (!signature.skipped && !signature.verified) {
+            return sendJson(res, 401, { error: 'Webhook signature verification failed.' })
+          }
+
+          const eventType = body.event_type
+          if (!TRACKED_WEBHOOK_EVENTS.has(eventType)) {
+            return sendJson(res, 200, {
+              received: true,
+              ignored: true,
+              eventType,
+            })
+          }
+
+          const orderId = extractOrderIdFromWebhook(body)
+          if (!orderId) {
+            return sendJson(res, 400, { error: 'Unable to determine order ID from webhook payload.' })
+          }
+
+          const existingRecord = getPaymentRecord(orderId)
+          const normalizedOrder = mapWebhookToOrderShape(body, existingRecord)
+          const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`)
+
+          return sendJson(res, 200, {
+            received: true,
+            eventType,
+            orderId,
+            updatedStatus: record.status,
+            signatureVerified: signature.verified,
+            signatureVerificationSkipped: signature.skipped,
+          })
+        } catch (error) {
+          console.error('PayPal webhook error:', error)
+          return sendJson(res, 500, { error: error.message || 'Failed to process webhook.' })
         }
       })
     },

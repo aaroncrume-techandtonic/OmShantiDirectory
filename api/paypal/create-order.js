@@ -1,4 +1,4 @@
-import { createPaypalOrder, sendJson } from './_paypal.js';
+import { createPaypalOrder, savePaymentRecord, sendJson } from './_paypal.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -7,6 +7,7 @@ export default async function handler(req, res) {
 
   try {
     const order = await createPaypalOrder();
+    savePaymentRecord(order, 'create');
     return sendJson(res, 200, { id: order.id, status: order.status });
   } catch (error) {
     console.error('PayPal create order error:', error);

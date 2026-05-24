@@ -115,7 +115,7 @@ export default function PaymentGate({ onPurchaseComplete }) {
             localStorage.setItem('omShantiMembership', JSON.stringify(purchaseData));
 
             // Notify parent that purchase is complete
-            onPurchaseComplete();
+            onPurchaseComplete(purchaseData);
           } catch (err) {
             console.error('Error capturing order:', err);
             setError(err.message || 'Payment processing failed. Please try again.');

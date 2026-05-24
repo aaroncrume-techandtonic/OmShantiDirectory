@@ -286,6 +286,7 @@ export default function App() {
   const [activeInfusion, setActiveInfusion] = useState(null);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [hasMembership, setHasMembership] = useState(false);
+  const [membershipLoading, setMembershipLoading] = useState(true);
   const [module1Step, setModule1Step] = useState(() => {
     if (localStorage.getItem('om_shanti_module_1_complete') === 'true') {
       return 'complete';
@@ -463,17 +464,58 @@ export default function App() {
   });
 
   useEffect(() => {
-    const membership = localStorage.getItem('omShantiMembership');
-    if (membership) {
+    let isMounted = true;
+
+    const checkMembershipSession = async () => {
       try {
-        const data = JSON.parse(membership);
-        if (data.status === 'completed') {
-          setHasMembership(true);
+        const response = await fetch('/api/membership/session', {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        const payload = await response.json();
+
+        if (!isMounted) {
+          return;
         }
-      } catch (e) {
-        console.error('Error parsing membership data:', e);
+
+        if (response.ok && payload.active) {
+          setHasMembership(true);
+          return;
+        }
+
+        const membership = localStorage.getItem('omShantiMembership');
+        if (!membership) {
+          setHasMembership(false);
+          return;
+        }
+
+        try {
+          const data = JSON.parse(membership);
+          setHasMembership(data.status === 'completed');
+        } catch (error) {
+          console.error('Error parsing local membership data:', error);
+          setHasMembership(false);
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        console.error('Error checking membership session:', error);
+        setHasMembership(false);
+      } finally {
+        if (isMounted) {
+          setMembershipLoading(false);
+        }
       }
-    }
+    };
+
+    checkMembershipSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -1167,8 +1209,21 @@ export default function App() {
     module25Step,
   ]);
 
+  if (membershipLoading) {
+    return <LoadingScreen />;
+  }
+
   if (!hasMembership) {
-    return <PaymentGate onPurchaseComplete={() => setHasMembership(true)} />;
+    return (
+      <PaymentGate
+        onPurchaseComplete={(purchaseData) => {
+          if (purchaseData) {
+            localStorage.setItem('omShantiMembership', JSON.stringify(purchaseData));
+          }
+          setHasMembership(true);
+        }}
+      />
+    );
   }
 
   if (module1Step === 'concept-1') {

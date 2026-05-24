@@ -6,7 +6,7 @@ OmShantiDirectory is a Vite + React application for guided spiritual learning. I
 
 - Presents a structured library of 25 guided modules built from 100 concept screens.
 - Gates full access behind a one-time PayPal membership flow.
-- Persists membership status in `localStorage` via `omShantiMembership`.
+- Validates membership against a server-issued, signed session cookie.
 - Persists per-module progression in `sessionStorage` using keys such as `omShantiModule1Step` through `omShantiModule25Step`.
 - Keeps background audio available globally through a shared audio context.
 - Uses video backdrops from `public/videos` for the immersive module experience.
@@ -48,6 +48,9 @@ VITE_PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
 PAYPAL_CLIENT_ID=YOUR_PAYPAL_CLIENT_ID
 PAYPAL_CLIENT_SECRET=YOUR_PAYPAL_CLIENT_SECRET
 PAYPAL_ENV=sandbox
+MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
+PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
+PAYMENTS_STORE_FILE=.payments-store.json
 ```
 
 ### Run locally
@@ -75,8 +78,11 @@ npm run preview
 - `src/main.jsx` mounts the app inside `AudioProvider` so playback state can persist across the experience.
 - `src/App.jsx` contains the main state machine for directory navigation, module progression, lazy-loaded concepts, and membership gating.
 - `src/components/MinimalAudioPlayer.jsx` maps the active module to its audio and video assets.
-- `src/PaymentGate.jsx` handles the PayPal purchase flow and unlocks access after a successful client-side capture.
+- `src/PaymentGate.jsx` handles the PayPal purchase flow and unlocks access after server-verified capture.
 - `src/lib/akashicLedger.js` stores module metadata and completion synchronization behavior.
+- `api/paypal/create-order.js` and `api/paypal/capture-order.js` create/capture PayPal orders on the server.
+- `api/paypal/webhook.js` ingests PayPal webhook events and updates stored payment records.
+- `api/membership/session.js` returns current server session status from the signed cookie.
 
 ## Media and repository notes
 
@@ -86,16 +92,16 @@ npm run preview
 
 ## Payment caveat
 
-The PayPal flow now creates and captures orders on the server side. The browser only loads the PayPal SDK and receives the verified order result after the backend capture succeeds. Membership access is still persisted locally in `localStorage` after the verified capture response returns.
+The PayPal flow now creates and captures orders on the server side. The browser only loads the PayPal SDK and receives the verified order result after the backend capture succeeds. Membership access is derived from a signed, HttpOnly session cookie.
 
-Local development serves the PayPal API routes through Vite middleware. Production needs a host that serves the `api/` functions, such as Vercel.
+Local development serves the PayPal API and membership routes through Vite middleware. Production needs a host that serves the `api/` functions, such as Vercel.
 
 Before treating this as a production payment system, add:
 
-- persistent purchase records
+- persistent purchase records in a managed database
+- webhook signature enforcement with `PAYPAL_WEBHOOK_ID`
 - membership recovery or account binding
 - operational refund and support workflows
-- webhook handling for asynchronous payment state changes
 
 Additional PayPal notes are in `PAYPAL_SETUP.md`.
 
