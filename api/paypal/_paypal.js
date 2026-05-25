@@ -1335,6 +1335,11 @@ export function isPaypalDebugAuthorized(req) {
 }
 
 export async function verifyWebhookSignature(req, body) {
+  const skipVerification = getEnvValue('PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY') === 'true';
+  if (skipVerification) {
+    return { verified: false, skipped: true, reason: 'PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY enabled' };
+  }
+
   const webhookId = getEnvValue('PAYPAL_WEBHOOK_ID');
   if (!webhookId) {
     return { verified: false, skipped: true, reason: 'PAYPAL_WEBHOOK_ID not set' };
