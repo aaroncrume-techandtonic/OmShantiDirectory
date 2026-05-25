@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { Pool } from 'pg';
 
 const PAYPAL_API_BASE = {
   sandbox: 'https://api-m.sandbox.paypal.com',
@@ -211,6 +212,66 @@ function getPaymentsDbPath() {
 }
 
 let paymentsDb = null;
+let paymentsPgPool = null;
+let postgresSchemaReadyPromise = null;
+
+function usePostgresStorage() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function getPaymentsPgPool() {
+  if (paymentsPgPool) {
+    return paymentsPgPool;
+  }
+
+  paymentsPgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  return paymentsPgPool;
+}
+
+async function ensurePostgresSchema() {
+  if (!usePostgresStorage()) {
+    return;
+  }
+
+  if (postgresSchemaReadyPromise) {
+    await postgresSchemaReadyPromise;
+    return;
+  }
+
+  postgresSchemaReadyPromise = (async () => {
+    const pool = getPaymentsPgPool();
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        order_id TEXT PRIMARY KEY,
+        status TEXT,
+        payer_email TEXT,
+        payer_id TEXT,
+        capture_id TEXT,
+        amount TEXT,
+        currency TEXT,
+        source TEXT,
+        updated_at TIMESTAMPTZ,
+        raw_json JSONB NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_payments_updated_at ON payments(updated_at);
+
+      CREATE TABLE IF NOT EXISTS webhook_events (
+        event_id TEXT PRIMARY KEY,
+        event_type TEXT,
+        order_id TEXT,
+        processing_status TEXT NOT NULL DEFAULT 'processed',
+        last_error TEXT,
+        processed_at TIMESTAMPTZ NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_webhook_events_processed_at ON webhook_events(processed_at);
+      CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON webhook_events(processing_status);
+    `);
+  })();
+
+  await postgresSchemaReadyPromise;
+}
 
 function ensureWebhookEventsSchema(db) {
   const columns = db.prepare('PRAGMA table_info(webhook_events)').all();
@@ -311,7 +372,54 @@ function normalizeOrderRecord(order, source) {
   };
 }
 
-export function savePaymentRecord(order, source = 'capture') {
+export async function savePaymentRecord(order, source = 'capture') {
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const record = normalizeOrderRecord(order, source);
+
+    await pool.query(
+      `
+        INSERT INTO payments (
+          order_id,
+          status,
+          payer_email,
+          payer_id,
+          capture_id,
+          amount,
+          currency,
+          source,
+          updated_at,
+          raw_json
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+        ON CONFLICT(order_id) DO UPDATE SET
+          status = EXCLUDED.status,
+          payer_email = EXCLUDED.payer_email,
+          payer_id = EXCLUDED.payer_id,
+          capture_id = EXCLUDED.capture_id,
+          amount = EXCLUDED.amount,
+          currency = EXCLUDED.currency,
+          source = EXCLUDED.source,
+          updated_at = EXCLUDED.updated_at,
+          raw_json = EXCLUDED.raw_json
+      `,
+      [
+        record.orderId,
+        record.status,
+        record.payerEmail,
+        record.payerId,
+        record.captureId,
+        record.amount,
+        record.currency,
+        record.source,
+        record.updatedAt,
+        JSON.stringify(order),
+      ],
+    );
+
+    return getPaymentRecord(record.orderId);
+  }
+
   const db = getPaymentsDb();
   const record = normalizeOrderRecord(order, source);
 
@@ -356,9 +464,34 @@ export function savePaymentRecord(order, source = 'capture') {
   return getPaymentRecord(record.orderId);
 }
 
-export function getPaymentRecord(orderId) {
+export async function getPaymentRecord(orderId) {
   if (!orderId) {
     return null;
+  }
+
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const result = await pool.query(
+      `
+        SELECT
+          order_id,
+          status,
+          payer_email,
+          payer_id,
+          capture_id,
+          amount,
+          currency,
+          source,
+          updated_at,
+          raw_json
+        FROM payments
+        WHERE order_id = $1
+      `,
+      [orderId],
+    );
+
+    return toPaymentRecord(result.rows[0]);
   }
 
   const db = getPaymentsDb();
@@ -383,16 +516,52 @@ export function getPaymentRecord(orderId) {
   return toPaymentRecord(row);
 }
 
-export function claimWebhookEventProcessing(eventId, eventType) {
+export async function claimWebhookEventProcessing(eventId, eventType) {
   if (!eventId) {
     return false;
   }
 
-  const db = getPaymentsDb();
   const now = new Date().toISOString();
   const timeoutSeconds = Number.parseInt(process.env.PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS || '', 10);
   const safeTimeoutSeconds = Number.isNaN(timeoutSeconds) || timeoutSeconds < 30 ? 300 : timeoutSeconds;
   const staleClaimCutoff = new Date(Date.now() - safeTimeoutSeconds * 1000).toISOString();
+
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const result = await pool.query(
+      `
+        INSERT INTO webhook_events (
+          event_id,
+          event_type,
+          order_id,
+          processing_status,
+          last_error,
+          processed_at
+        ) VALUES ($1,$2,$3,$4,$5,$6)
+        ON CONFLICT(event_id) DO UPDATE SET
+          event_type = EXCLUDED.event_type,
+          processing_status = 'claimed',
+          last_error = NULL,
+          processed_at = EXCLUDED.processed_at
+        WHERE webhook_events.processing_status = 'failed'
+           OR (webhook_events.processing_status = 'claimed' AND webhook_events.processed_at < $7)
+      `,
+      [eventId, eventType || null, null, 'claimed', null, now, staleClaimCutoff],
+    );
+
+    if (result.rowCount > 0) {
+      try {
+        await cleanupProcessedWebhookEvents();
+      } catch (error) {
+        console.warn('Failed to cleanup old webhook events:', error);
+      }
+    }
+
+    return result.rowCount > 0;
+  }
+
+  const db = getPaymentsDb();
   const result = db
     .prepare(`
       INSERT INTO webhook_events (
@@ -415,7 +584,7 @@ export function claimWebhookEventProcessing(eventId, eventType) {
 
   if (result.changes > 0) {
     try {
-      cleanupProcessedWebhookEvents();
+      await cleanupProcessedWebhookEvents();
     } catch (error) {
       console.warn('Failed to cleanup old webhook events:', error);
     }
@@ -424,8 +593,26 @@ export function claimWebhookEventProcessing(eventId, eventType) {
   return result.changes > 0;
 }
 
-export function markWebhookEventProcessed(eventId, orderId = null) {
+export async function markWebhookEventProcessed(eventId, orderId = null) {
   if (!eventId) {
+    return;
+  }
+
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    await pool.query(
+      `
+        UPDATE webhook_events
+        SET
+          order_id = COALESCE(order_id, $1),
+          processing_status = 'processed',
+          last_error = NULL,
+          processed_at = $2
+        WHERE event_id = $3
+      `,
+      [orderId, new Date().toISOString(), eventId],
+    );
     return;
   }
 
@@ -443,12 +630,30 @@ export function markWebhookEventProcessed(eventId, orderId = null) {
     .run(orderId, new Date().toISOString(), eventId);
 }
 
-export function markWebhookEventFailed(eventId, error) {
+export async function markWebhookEventFailed(eventId, error) {
   if (!eventId) {
     return;
   }
 
   const message = String(error?.message || error || 'Webhook processing failed').slice(0, 500);
+
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    await pool.query(
+      `
+        UPDATE webhook_events
+        SET
+          processing_status = 'failed',
+          last_error = $1,
+          processed_at = $2
+        WHERE event_id = $3
+      `,
+      [message, new Date().toISOString(), eventId],
+    );
+    return;
+  }
+
   const db = getPaymentsDb();
   db
     .prepare(`
@@ -471,7 +676,15 @@ function getWebhookEventRetentionDays() {
   return configuredDays;
 }
 
-export function cleanupProcessedWebhookEvents(retentionDays = getWebhookEventRetentionDays()) {
+export async function cleanupProcessedWebhookEvents(retentionDays = getWebhookEventRetentionDays()) {
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const result = await pool.query('DELETE FROM webhook_events WHERE processed_at < $1', [cutoff]);
+    return result.rowCount;
+  }
+
   const db = getPaymentsDb();
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
   const result = db
@@ -481,7 +694,34 @@ export function cleanupProcessedWebhookEvents(retentionDays = getWebhookEventRet
   return result.changes;
 }
 
-export function getRecentPayments(limit = 20) {
+export async function getRecentPayments(limit = 20) {
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
+    const result = await pool.query(
+      `
+        SELECT
+          order_id,
+          status,
+          payer_email,
+          payer_id,
+          capture_id,
+          amount,
+          currency,
+          source,
+          updated_at,
+          raw_json
+        FROM payments
+        ORDER BY updated_at DESC
+        LIMIT $1
+      `,
+      [safeLimit],
+    );
+
+    return result.rows.map((row) => toPaymentRecord(row)).filter(Boolean);
+  }
+
   const db = getPaymentsDb();
   const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
   const rows = db
@@ -506,7 +746,37 @@ export function getRecentPayments(limit = 20) {
   return rows.map((row) => toPaymentRecord(row)).filter(Boolean);
 }
 
-export function getRecentWebhookEvents(limit = 20) {
+export async function getRecentWebhookEvents(limit = 20) {
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
+    const result = await pool.query(
+      `
+        SELECT
+          event_id,
+          event_type,
+          order_id,
+          processing_status,
+          last_error,
+          processed_at
+        FROM webhook_events
+        ORDER BY processed_at DESC
+        LIMIT $1
+      `,
+      [safeLimit],
+    );
+
+    return result.rows.map((row) => ({
+      eventId: row.event_id,
+      eventType: row.event_type,
+      orderId: row.order_id,
+      processingStatus: row.processing_status,
+      lastError: row.last_error,
+      processedAt: row.processed_at,
+    }));
+  }
+
   const db = getPaymentsDb();
   const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
 
@@ -534,7 +804,50 @@ export function getRecentWebhookEvents(limit = 20) {
     }));
 }
 
-export function getFailedWebhookEvents(limit = 20, offset = 0) {
+export async function getFailedWebhookEvents(limit = 20, offset = 0) {
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
+    const safeOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
+
+    const rowsResult = await pool.query(
+      `
+        SELECT
+          event_id,
+          event_type,
+          order_id,
+          processing_status,
+          last_error,
+          processed_at
+        FROM webhook_events
+        WHERE processing_status = 'failed'
+        ORDER BY processed_at DESC
+        LIMIT $1
+        OFFSET $2
+      `,
+      [safeLimit, safeOffset],
+    );
+
+    const totalResult = await pool.query("SELECT COUNT(*) AS total FROM webhook_events WHERE processing_status = 'failed'");
+    const total = Number(totalResult.rows?.[0]?.total || 0);
+
+    return {
+      items: rowsResult.rows.map((row) => ({
+        eventId: row.event_id,
+        eventType: row.event_type,
+        orderId: row.order_id,
+        processingStatus: row.processing_status,
+        lastError: row.last_error,
+        processedAt: row.processed_at,
+      })),
+      total,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + rowsResult.rows.length < total,
+    };
+  }
+
   const db = getPaymentsDb();
   const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
   const safeOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
@@ -579,7 +892,64 @@ export function getFailedWebhookEvents(limit = 20, offset = 0) {
   };
 }
 
-export function getFailedWebhookSummary(limit = 10) {
+export async function getFailedWebhookSummary(limit = 10) {
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 10, 50));
+
+    const totalFailedRow = await pool.query("SELECT COUNT(*) AS total FROM webhook_events WHERE processing_status = 'failed'");
+    const byEventTypeRow = await pool.query(
+      `
+        SELECT
+          event_type,
+          COUNT(*) AS count
+        FROM webhook_events
+        WHERE processing_status = 'failed'
+        GROUP BY event_type
+        ORDER BY count DESC
+        LIMIT $1
+      `,
+      [safeLimit],
+    );
+
+    const byErrorRow = await pool.query(
+      `
+        SELECT
+          COALESCE(NULLIF(last_error, ''), 'Unknown error') AS error_message,
+          COUNT(*) AS count
+        FROM webhook_events
+        WHERE processing_status = 'failed'
+        GROUP BY error_message
+        ORDER BY count DESC
+        LIMIT $1
+      `,
+      [safeLimit],
+    );
+
+    const latestFailedRow = await pool.query(
+      `
+        SELECT MAX(processed_at) AS latest_failed_at
+        FROM webhook_events
+        WHERE processing_status = 'failed'
+      `,
+    );
+
+    return {
+      totalFailed: Number(totalFailedRow.rows?.[0]?.total || 0),
+      latestFailedAt: latestFailedRow.rows?.[0]?.latest_failed_at || null,
+      byEventType: byEventTypeRow.rows.map((row) => ({
+        eventType: row.event_type || 'UNKNOWN',
+        count: Number(row.count || 0),
+      })),
+      byError: byErrorRow.rows.map((row) => ({
+        error: row.error_message,
+        count: Number(row.count || 0),
+      })),
+      limit: safeLimit,
+    };
+  }
+
   const db = getPaymentsDb();
   const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 10, 50));
   const totalFailedRow = db
@@ -637,7 +1007,48 @@ export function getFailedWebhookSummary(limit = 10) {
   };
 }
 
-export function purgeFailedWebhookEvents(olderThanDays = 30, dryRun = true, limit = 500) {
+export async function purgeFailedWebhookEvents(olderThanDays = 30, dryRun = true, limit = 500) {
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const parsedDays = Number.parseInt(String(olderThanDays), 10);
+    const safeDays = Number.isNaN(parsedDays) || parsedDays < 0 ? 30 : parsedDays;
+    const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 500, 5000));
+    const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const candidateRows = await pool.query(
+      `
+        SELECT event_id
+        FROM webhook_events
+        WHERE processing_status = 'failed'
+          AND processed_at < $1
+        ORDER BY processed_at ASC
+        LIMIT $2
+      `,
+      [cutoff, safeLimit],
+    );
+    const candidates = candidateRows.rows.map((row) => row.event_id).filter(Boolean);
+
+    let deletedCount = 0;
+    if (!dryRun && candidates.length > 0) {
+      const deleteResult = await pool.query(
+        'DELETE FROM webhook_events WHERE event_id = ANY($1::text[])',
+        [candidates],
+      );
+      deletedCount = Number(deleteResult.rowCount || 0);
+    }
+
+    return {
+      dryRun: Boolean(dryRun),
+      olderThanDays: safeDays,
+      limit: safeLimit,
+      candidateCount: candidates.length,
+      deletedCount,
+      sampleEventIds: candidates.slice(0, 20),
+      cutoff,
+    };
+  }
+
   const db = getPaymentsDb();
   const parsedDays = Number.parseInt(String(olderThanDays), 10);
   const safeDays = Number.isNaN(parsedDays) || parsedDays < 0 ? 30 : parsedDays;
@@ -677,9 +1088,42 @@ export function purgeFailedWebhookEvents(olderThanDays = 30, dryRun = true, limi
   };
 }
 
-export function getWebhookEventById(eventId) {
+export async function getWebhookEventById(eventId) {
   if (!eventId) {
     return null;
+  }
+
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const result = await pool.query(
+      `
+        SELECT
+          event_id,
+          event_type,
+          order_id,
+          processing_status,
+          last_error,
+          processed_at
+        FROM webhook_events
+        WHERE event_id = $1
+      `,
+      [eventId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      eventId: row.event_id,
+      eventType: row.event_type,
+      orderId: row.order_id,
+      processingStatus: row.processing_status,
+      lastError: row.last_error,
+      processedAt: row.processed_at,
+    };
   }
 
   const db = getPaymentsDb();
@@ -711,13 +1155,37 @@ export function getWebhookEventById(eventId) {
   };
 }
 
-export function requeueFailedWebhookEvent(eventId, reason = 'Manual requeue requested') {
+export async function requeueFailedWebhookEvent(eventId, reason = 'Manual requeue requested') {
   if (!eventId) {
     return null;
   }
 
-  const db = getPaymentsDb();
   const safeReason = String(reason || 'Manual requeue requested').slice(0, 500);
+
+  if (usePostgresStorage()) {
+    await ensurePostgresSchema();
+    const pool = getPaymentsPgPool();
+    const result = await pool.query(
+      `
+        UPDATE webhook_events
+        SET
+          processing_status = 'failed',
+          last_error = $1,
+          processed_at = $2
+        WHERE event_id = $3
+          AND processing_status = 'failed'
+      `,
+      [safeReason, new Date().toISOString(), eventId],
+    );
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+
+    return getWebhookEventById(eventId);
+  }
+
+  const db = getPaymentsDb();
   const result = db
     .prepare(`
       UPDATE webhook_events
@@ -737,13 +1205,13 @@ export function requeueFailedWebhookEvent(eventId, reason = 'Manual requeue requ
   return getWebhookEventById(eventId);
 }
 
-export function requeueFailedWebhookEvents(limit = 20, offset = 0, reason = 'Manual batch requeue requested') {
-  const failedPage = getFailedWebhookEvents(limit, offset);
+export async function requeueFailedWebhookEvents(limit = 20, offset = 0, reason = 'Manual batch requeue requested') {
+  const failedPage = await getFailedWebhookEvents(limit, offset);
   const safeReason = String(reason || 'Manual batch requeue requested').slice(0, 500);
   const events = [];
 
   for (const event of failedPage.items) {
-    const updated = requeueFailedWebhookEvent(event.eventId, safeReason);
+    const updated = await requeueFailedWebhookEvent(event.eventId, safeReason);
     if (updated) {
       events.push(updated);
     }

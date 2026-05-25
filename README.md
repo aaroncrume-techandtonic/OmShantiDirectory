@@ -108,6 +108,11 @@ Before treating this as a production payment system, add:
 - stale `claimed` webhook events are reclaimable after `PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS`
 - optional diagnostics endpoint token via `PAYPAL_DEBUG_TOKEN`
 
+Storage backend behavior:
+
+- When `DATABASE_URL` is set, payment and webhook persistence uses Postgres.
+- When `DATABASE_URL` is not set, persistence falls back to local SQLite (`PAYMENTS_STORE_FILE`).
+
 ### Debug Endpoint (Optional)
 
 - Endpoint: `GET /api/paypal/debug?limit=20`

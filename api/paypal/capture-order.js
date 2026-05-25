@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   try {
     const body = await readJsonBody(req);
     const order = await capturePaypalOrder(body.orderId);
-    const record = savePaymentRecord(order, 'capture');
+    const record = await savePaymentRecord(order, 'capture');
     const sessionToken = createMembershipSession({
       orderId: record.orderId,
       payerId: record.payerId,

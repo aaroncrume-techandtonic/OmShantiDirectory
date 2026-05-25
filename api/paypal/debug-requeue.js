@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     return sendJson(res, 400, { error: 'Missing eventId.' });
   }
 
-  const event = getWebhookEventById(eventId);
+  const event = await getWebhookEventById(eventId);
   if (!event) {
     return sendJson(res, 404, { error: 'Webhook event not found.' });
   }
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const requeuedEvent = requeueFailedWebhookEvent(eventId, 'Manual requeue requested');
+  const requeuedEvent = await requeueFailedWebhookEvent(eventId, 'Manual requeue requested');
 
   return sendJson(res, 200, {
     ok: true,

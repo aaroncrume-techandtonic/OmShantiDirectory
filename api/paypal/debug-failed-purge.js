@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   const olderThanDays = Number.parseInt(String(body?.olderThanDays ?? 30), 10);
   const limit = Number.parseInt(String(body?.limit ?? 500), 10);
   const dryRun = body?.dryRun !== false;
-  const result = purgeFailedWebhookEvents(olderThanDays, dryRun, limit);
+  const result = await purgeFailedWebhookEvents(olderThanDays, dryRun, limit);
 
   return sendJson(res, 200, {
     ok: true,

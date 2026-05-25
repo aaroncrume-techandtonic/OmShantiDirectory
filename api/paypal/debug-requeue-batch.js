@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   const offset = Number.parseInt(String(body?.offset ?? 0), 10);
   const reason = body?.reason || 'Manual batch requeue requested';
 
-  const result = requeueFailedWebhookEvents(limit, offset, reason);
+  const result = await requeueFailedWebhookEvents(limit, offset, reason);
 
   return sendJson(res, 200, {
     ok: true,

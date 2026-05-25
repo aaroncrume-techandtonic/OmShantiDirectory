@@ -87,7 +87,7 @@ export default async function handler(req, res) {
       return sendJson(res, 400, { error: 'Missing webhook event ID.' });
     }
 
-    const claimed = claimWebhookEventProcessing(eventId, eventType);
+    const claimed = await claimWebhookEventProcessing(eventId, eventType);
     if (!claimed) {
       return sendJson(res, 200, {
         received: true,
@@ -103,10 +103,10 @@ export default async function handler(req, res) {
         throw createHttpError(400, 'Unable to determine order ID from webhook payload.');
       }
 
-      const existingRecord = getPaymentRecord(orderId);
+      const existingRecord = await getPaymentRecord(orderId);
       const normalizedOrder = mapWebhookToOrderShape(body, existingRecord);
-      const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`);
-      markWebhookEventProcessed(eventId, orderId);
+      const record = await savePaymentRecord(normalizedOrder, `webhook:${eventType}`);
+      await markWebhookEventProcessed(eventId, orderId);
 
       return sendJson(res, 200, {
         received: true,
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       try {
-        markWebhookEventFailed(eventId, error);
+        await markWebhookEventFailed(eventId, error);
       } catch (markError) {
         console.warn('Failed to mark webhook event as failed:', markError);
       }

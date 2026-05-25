@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
   return sendJson(res, 200, {
     ok: true,
-    payments: getRecentPayments(limit),
-    webhookEvents: getRecentWebhookEvents(limit),
+    payments: await getRecentPayments(limit),
+    webhookEvents: await getRecentWebhookEvents(limit),
   });
 }

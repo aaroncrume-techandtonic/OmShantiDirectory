@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   const url = new URL(req.url || 'http://localhost');
   const limit = Number.parseInt(url.searchParams.get('limit') || '20', 10);
   const offset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
-  const result = getFailedWebhookEvents(limit, offset);
+  const result = await getFailedWebhookEvents(limit, offset);
 
   return sendJson(res, 200, {
     ok: true,

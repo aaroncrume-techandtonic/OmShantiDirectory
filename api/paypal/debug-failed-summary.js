@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   const url = new URL(req.url || 'http://localhost');
   const limit = Number.parseInt(url.searchParams.get('limit') || '10', 10);
-  const summary = getFailedWebhookSummary(limit);
+  const summary = await getFailedWebhookSummary(limit);
 
   return sendJson(res, 200, {
     ok: true,

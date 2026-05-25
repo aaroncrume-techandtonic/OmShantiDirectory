@@ -117,7 +117,7 @@ function paypalDevApiPlugin() {
 
         try {
           const order = await createPaypalOrder()
-          savePaymentRecord(order, 'create')
+          await savePaymentRecord(order, 'create')
           return sendJson(res, 200, { id: order.id, status: order.status })
         } catch (error) {
           console.error('PayPal create order error:', error)
@@ -133,7 +133,7 @@ function paypalDevApiPlugin() {
         try {
           const body = await readRequestBody(req)
           const order = await capturePaypalOrder(body.orderId)
-          const record = savePaymentRecord(order, 'capture')
+          const record = await savePaymentRecord(order, 'capture')
           const sessionToken = createMembershipSession({
             orderId: record.orderId,
             payerId: record.payerId,
@@ -207,7 +207,7 @@ function paypalDevApiPlugin() {
             return sendJson(res, 400, { error: 'Missing webhook event ID.' })
           }
 
-          const claimed = claimWebhookEventProcessing(eventId, eventType)
+          const claimed = await claimWebhookEventProcessing(eventId, eventType)
           if (!claimed) {
             return sendJson(res, 200, {
               received: true,
@@ -223,10 +223,10 @@ function paypalDevApiPlugin() {
               throw createHttpError(400, 'Unable to determine order ID from webhook payload.')
             }
 
-            const existingRecord = getPaymentRecord(orderId)
+            const existingRecord = await getPaymentRecord(orderId)
             const normalizedOrder = mapWebhookToOrderShape(body, existingRecord)
-            const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`)
-            markWebhookEventProcessed(eventId, orderId)
+            const record = await savePaymentRecord(normalizedOrder, `webhook:${eventType}`)
+            await markWebhookEventProcessed(eventId, orderId)
 
             return sendJson(res, 200, {
               received: true,
@@ -239,7 +239,7 @@ function paypalDevApiPlugin() {
             })
           } catch (error) {
             try {
-              markWebhookEventFailed(eventId, error)
+              await markWebhookEventFailed(eventId, error)
             } catch (markError) {
               console.warn('Failed to mark webhook event as failed:', markError)
             }
@@ -271,8 +271,8 @@ function paypalDevApiPlugin() {
 
         return sendJson(res, 200, {
           ok: true,
-          payments: getRecentPayments(limit),
-          webhookEvents: getRecentWebhookEvents(limit),
+          payments: await getRecentPayments(limit),
+          webhookEvents: await getRecentWebhookEvents(limit),
         })
       })
 
@@ -297,7 +297,7 @@ function paypalDevApiPlugin() {
           return sendJson(res, 400, { error: 'Missing eventId.' })
         }
 
-        const event = getWebhookEventById(eventId)
+        const event = await getWebhookEventById(eventId)
         if (!event) {
           return sendJson(res, 404, { error: 'Webhook event not found.' })
         }
@@ -309,7 +309,7 @@ function paypalDevApiPlugin() {
           })
         }
 
-        const requeuedEvent = requeueFailedWebhookEvent(eventId, 'Manual requeue requested')
+        const requeuedEvent = await requeueFailedWebhookEvent(eventId, 'Manual requeue requested')
 
         return sendJson(res, 200, {
           ok: true,
@@ -330,7 +330,7 @@ function paypalDevApiPlugin() {
         const limit = Number.parseInt(String(body?.limit ?? 20), 10)
         const offset = Number.parseInt(String(body?.offset ?? 0), 10)
         const reason = body?.reason || 'Manual batch requeue requested'
-        const result = requeueFailedWebhookEvents(limit, offset, reason)
+        const result = await requeueFailedWebhookEvents(limit, offset, reason)
 
         return sendJson(res, 200, {
           ok: true,
@@ -355,7 +355,7 @@ function paypalDevApiPlugin() {
         const url = new URL(req.url || '/', 'http://localhost')
         const limit = Number.parseInt(url.searchParams.get('limit') || '20', 10)
         const offset = Number.parseInt(url.searchParams.get('offset') || '0', 10)
-        const result = getFailedWebhookEvents(limit, offset)
+        const result = await getFailedWebhookEvents(limit, offset)
 
         return sendJson(res, 200, {
           ok: true,
@@ -374,7 +374,7 @@ function paypalDevApiPlugin() {
 
         const url = new URL(req.url || '/', 'http://localhost')
         const limit = Number.parseInt(url.searchParams.get('limit') || '10', 10)
-        const summary = getFailedWebhookSummary(limit)
+        const summary = await getFailedWebhookSummary(limit)
 
         return sendJson(res, 200, {
           ok: true,
@@ -395,7 +395,7 @@ function paypalDevApiPlugin() {
         const olderThanDays = Number.parseInt(String(body?.olderThanDays ?? 30), 10)
         const limit = Number.parseInt(String(body?.limit ?? 500), 10)
         const dryRun = body?.dryRun !== false
-        const result = purgeFailedWebhookEvents(olderThanDays, dryRun, limit)
+        const result = await purgeFailedWebhookEvents(olderThanDays, dryRun, limit)
 
         return sendJson(res, 200, {
           ok: true,
