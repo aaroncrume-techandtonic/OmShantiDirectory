@@ -56,6 +56,13 @@ PAYMENTS_STORE_FILE=.payments-store.db
 4. After successful payment, you'll be redirected to the app
 5. Membership is stored in localStorage
 
+### Step 6: Optional SQLite -> Postgres Migration Start
+
+1. Set `DATABASE_URL` in `.env.local`
+2. Review `db/postgres-schema.sql`
+3. Run `npm run db:migrate:sqlite-to-postgres`
+4. Confirm copied rows in Postgres (`payments` and `webhook_events`)
+
 ## How It Works
 
 **Purchase Flow:**

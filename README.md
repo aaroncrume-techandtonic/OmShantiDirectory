@@ -153,6 +153,13 @@ Before treating this as a production payment system, add:
 
 Additional PayPal notes are in `PAYPAL_SETUP.md`.
 
+### SQLite to Postgres Migration (Start)
+
+- Define `DATABASE_URL` in `.env.local`
+- Review schema in `db/postgres-schema.sql`
+- Run `npm run db:migrate:sqlite-to-postgres`
+- The migration copies existing `payments` and `webhook_events` rows into Postgres using upserts
+
 ## Project shape
 
 - `src/Concept*.jsx`: concept screens
