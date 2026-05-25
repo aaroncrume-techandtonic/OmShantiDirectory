@@ -534,6 +534,66 @@ export function getRecentWebhookEvents(limit = 20) {
     }));
 }
 
+export function getWebhookEventById(eventId) {
+  if (!eventId) {
+    return null;
+  }
+
+  const db = getPaymentsDb();
+  const row = db
+    .prepare(`
+      SELECT
+        event_id,
+        event_type,
+        order_id,
+        processing_status,
+        last_error,
+        processed_at
+      FROM webhook_events
+      WHERE event_id = ?
+    `)
+    .get(eventId);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    eventId: row.event_id,
+    eventType: row.event_type,
+    orderId: row.order_id,
+    processingStatus: row.processing_status,
+    lastError: row.last_error,
+    processedAt: row.processed_at,
+  };
+}
+
+export function requeueFailedWebhookEvent(eventId, reason = 'Manual requeue requested') {
+  if (!eventId) {
+    return null;
+  }
+
+  const db = getPaymentsDb();
+  const safeReason = String(reason || 'Manual requeue requested').slice(0, 500);
+  const result = db
+    .prepare(`
+      UPDATE webhook_events
+      SET
+        processing_status = 'failed',
+        last_error = ?,
+        processed_at = ?
+      WHERE event_id = ?
+        AND processing_status = 'failed'
+    `)
+    .run(safeReason, new Date().toISOString(), eventId);
+
+  if (result.changes === 0) {
+    return null;
+  }
+
+  return getWebhookEventById(eventId);
+}
+
 export function isPaypalDebugAuthorized(req) {
   const configuredToken = process.env.PAYPAL_DEBUG_TOKEN;
   if (!configuredToken) {

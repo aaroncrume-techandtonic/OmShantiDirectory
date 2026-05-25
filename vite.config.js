@@ -10,10 +10,12 @@ import {
   getPaymentRecord,
   getRecentPayments,
   getRecentWebhookEvents,
+  getWebhookEventById,
   isPaypalDebugAuthorized,
   markWebhookEventFailed,
   markWebhookEventProcessed,
   parseCookies,
+  requeueFailedWebhookEvent,
   savePaymentRecord,
   verifyWebhookSignature,
   verifyMembershipSession,
@@ -262,6 +264,42 @@ function paypalDevApiPlugin() {
           ok: true,
           payments: getRecentPayments(limit),
           webhookEvents: getRecentWebhookEvents(limit),
+        })
+      })
+
+      server.middlewares.use('/api/paypal/debug/requeue', async (req, res, next) => {
+        if (req.method !== 'POST') {
+          return next()
+        }
+
+        if (!isPaypalDebugAuthorized(req)) {
+          return sendJson(res, 403, { error: 'Debug access denied.' })
+        }
+
+        const body = await readRequestBody(req)
+        const eventId = body?.eventId || null
+
+        if (!eventId) {
+          return sendJson(res, 400, { error: 'Missing eventId.' })
+        }
+
+        const event = getWebhookEventById(eventId)
+        if (!event) {
+          return sendJson(res, 404, { error: 'Webhook event not found.' })
+        }
+
+        if (event.processingStatus !== 'failed') {
+          return sendJson(res, 409, {
+            error: 'Only failed webhook events can be requeued.',
+            event,
+          })
+        }
+
+        const requeuedEvent = requeueFailedWebhookEvent(eventId, 'Manual requeue requested')
+
+        return sendJson(res, 200, {
+          ok: true,
+          event: requeuedEvent || event,
         })
       })
     },

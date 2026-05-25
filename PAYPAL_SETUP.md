@@ -77,6 +77,7 @@ PAYMENTS_STORE_FILE=.payments-store.db
 - Webhook events are status-tracked (`claimed`, `processed`, `failed`) so failed deliveries can be retried safely
 - Stale `claimed` events are reclaimable after `PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS`
 - Optional diagnostics endpoint is protected by `PAYPAL_DEBUG_TOKEN`
+- Optional manual requeue endpoint (`POST /api/paypal/debug/requeue`) allows retry testing for `failed` events
 
 ## Production Checklist
 

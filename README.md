@@ -114,6 +114,13 @@ Before treating this as a production payment system, add:
 - Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
 - Response includes recent `payments` and `webhookEvents` rows for troubleshooting
 - `webhookEvents` rows include `processingStatus` and `lastError` fields
+
+### Manual Requeue Endpoint (Optional)
+
+- Endpoint: `POST /api/paypal/debug/requeue`
+- Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
+- JSON body: `{ "eventId": "<PAYPAL_WEBHOOK_EVENT_ID>" }`
+- Requeues only `failed` webhook events for controlled recovery testing
 - membership recovery or account binding
 - operational refund and support workflows
 
