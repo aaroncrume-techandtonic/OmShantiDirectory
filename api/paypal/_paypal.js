@@ -397,6 +397,78 @@ export function cleanupProcessedWebhookEvents(retentionDays = getWebhookEventRet
   return result.changes;
 }
 
+export function getRecentPayments(limit = 20) {
+  const db = getPaymentsDb();
+  const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
+  const rows = db
+    .prepare(`
+      SELECT
+        order_id,
+        status,
+        payer_email,
+        payer_id,
+        capture_id,
+        amount,
+        currency,
+        source,
+        updated_at,
+        raw_json
+      FROM payments
+      ORDER BY updated_at DESC
+      LIMIT ?
+    `)
+    .all(safeLimit);
+
+  return rows.map((row) => toPaymentRecord(row)).filter(Boolean);
+}
+
+export function getRecentWebhookEvents(limit = 20) {
+  const db = getPaymentsDb();
+  const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
+
+  return db
+    .prepare(`
+      SELECT
+        event_id,
+        event_type,
+        order_id,
+        processed_at
+      FROM webhook_events
+      ORDER BY processed_at DESC
+      LIMIT ?
+    `)
+    .all(safeLimit)
+    .map((row) => ({
+      eventId: row.event_id,
+      eventType: row.event_type,
+      orderId: row.order_id,
+      processedAt: row.processed_at,
+    }));
+}
+
+export function isPaypalDebugAuthorized(req) {
+  const configuredToken = process.env.PAYPAL_DEBUG_TOKEN;
+  if (!configuredToken) {
+    return false;
+  }
+
+  const providedHeader = req.headers?.['x-paypal-debug-token'] || req.headers?.['x-debug-token'];
+  const providedToken = Array.isArray(providedHeader) ? providedHeader[0] : providedHeader;
+
+  if (!providedToken) {
+    return false;
+  }
+
+  const providedBuffer = Buffer.from(String(providedToken));
+  const configuredBuffer = Buffer.from(configuredToken);
+
+  if (providedBuffer.length !== configuredBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(providedBuffer, configuredBuffer);
+}
+
 export function recordWebhookEvent(eventId, eventType, orderId = null) {
   if (!eventId) {
     return false;

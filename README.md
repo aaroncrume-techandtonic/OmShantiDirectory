@@ -51,6 +51,7 @@ PAYPAL_ENV=sandbox
 MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
 PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS=30
+PAYPAL_DEBUG_TOKEN=SET_A_LONG_RANDOM_DEBUG_TOKEN
 PAYMENTS_STORE_FILE=.payments-store.db
 ```
 
@@ -102,6 +103,13 @@ Before treating this as a production payment system, add:
 - persistent purchase records in a managed database
 - webhook signature enforcement with `PAYPAL_WEBHOOK_ID`
 - webhook event idempotency with configurable retention via `PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS`
+- optional diagnostics endpoint token via `PAYPAL_DEBUG_TOKEN`
+
+### Debug Endpoint (Optional)
+
+- Endpoint: `GET /api/paypal/debug?limit=20`
+- Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
+- Response includes recent `payments` and `webhookEvents` rows for troubleshooting
 - membership recovery or account binding
 - operational refund and support workflows
 

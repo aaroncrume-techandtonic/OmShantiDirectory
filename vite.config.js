@@ -7,7 +7,12 @@ import {
   createPaypalOrder,
   extractOrderIdFromWebhook,
   getPaymentRecord,
+  getRecentPayments,
+  getRecentWebhookEvents,
+  hasProcessedWebhookEvent,
+  isPaypalDebugAuthorized,
   parseCookies,
+  recordWebhookEvent,
   savePaymentRecord,
   verifyWebhookSignature,
   verifyMembershipSession,
@@ -51,6 +56,10 @@ function mapWebhookToOrderShape(body, existingRecord) {
       },
     ],
   }
+}
+
+function getWebhookEventId(body) {
+  return body?.id || null
 }
 
 function sendJson(res, statusCode, payload) {
@@ -180,6 +189,20 @@ function paypalDevApiPlugin() {
             })
           }
 
+          const eventId = getWebhookEventId(body)
+          if (!eventId) {
+            return sendJson(res, 400, { error: 'Missing webhook event ID.' })
+          }
+
+          if (hasProcessedWebhookEvent(eventId)) {
+            return sendJson(res, 200, {
+              received: true,
+              duplicate: true,
+              eventType,
+              eventId,
+            })
+          }
+
           const orderId = extractOrderIdFromWebhook(body)
           if (!orderId) {
             return sendJson(res, 400, { error: 'Unable to determine order ID from webhook payload.' })
@@ -188,10 +211,12 @@ function paypalDevApiPlugin() {
           const existingRecord = getPaymentRecord(orderId)
           const normalizedOrder = mapWebhookToOrderShape(body, existingRecord)
           const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`)
+          recordWebhookEvent(eventId, eventType, orderId)
 
           return sendJson(res, 200, {
             received: true,
             eventType,
+            eventId,
             orderId,
             updatedStatus: record.status,
             signatureVerified: signature.verified,
@@ -201,6 +226,25 @@ function paypalDevApiPlugin() {
           console.error('PayPal webhook error:', error)
           return sendJson(res, 500, { error: error.message || 'Failed to process webhook.' })
         }
+      })
+
+      server.middlewares.use('/api/paypal/debug', async (req, res, next) => {
+        if (req.method !== 'GET') {
+          return next()
+        }
+
+        if (!isPaypalDebugAuthorized(req)) {
+          return sendJson(res, 403, { error: 'Debug access denied.' })
+        }
+
+        const url = new URL(req.url || '/', 'http://localhost')
+        const limit = Number.parseInt(url.searchParams.get('limit') || '20', 10)
+
+        return sendJson(res, 200, {
+          ok: true,
+          payments: getRecentPayments(limit),
+          webhookEvents: getRecentWebhookEvents(limit),
+        })
       })
     },
   }
