@@ -534,6 +534,51 @@ export function getRecentWebhookEvents(limit = 20) {
     }));
 }
 
+export function getFailedWebhookEvents(limit = 20, offset = 0) {
+  const db = getPaymentsDb();
+  const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
+  const safeOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
+
+  const rows = db
+    .prepare(`
+      SELECT
+        event_id,
+        event_type,
+        order_id,
+        processing_status,
+        last_error,
+        processed_at
+      FROM webhook_events
+      WHERE processing_status = 'failed'
+      ORDER BY processed_at DESC
+      LIMIT ?
+      OFFSET ?
+    `)
+    .all(safeLimit, safeOffset)
+    .map((row) => ({
+      eventId: row.event_id,
+      eventType: row.event_type,
+      orderId: row.order_id,
+      processingStatus: row.processing_status,
+      lastError: row.last_error,
+      processedAt: row.processed_at,
+    }));
+
+  const totalRow = db
+    .prepare("SELECT COUNT(*) AS total FROM webhook_events WHERE processing_status = 'failed'")
+    .get();
+
+  const total = Number(totalRow?.total || 0);
+
+  return {
+    items: rows,
+    total,
+    limit: safeLimit,
+    offset: safeOffset,
+    hasMore: safeOffset + rows.length < total,
+  };
+}
+
 export function getWebhookEventById(eventId) {
   if (!eventId) {
     return null;

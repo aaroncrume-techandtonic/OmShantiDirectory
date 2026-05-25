@@ -10,6 +10,7 @@ import {
   getPaymentRecord,
   getRecentPayments,
   getRecentWebhookEvents,
+  getFailedWebhookEvents,
   getWebhookEventById,
   isPaypalDebugAuthorized,
   markWebhookEventFailed,
@@ -253,6 +254,11 @@ function paypalDevApiPlugin() {
           return next()
         }
 
+        const mountRelativePath = (req.url || '').split('?')[0]
+        if (mountRelativePath.startsWith('/failed') || mountRelativePath.startsWith('/requeue')) {
+          return next()
+        }
+
         if (!isPaypalDebugAuthorized(req)) {
           return sendJson(res, 403, { error: 'Debug access denied.' })
         }
@@ -300,6 +306,26 @@ function paypalDevApiPlugin() {
         return sendJson(res, 200, {
           ok: true,
           event: requeuedEvent || event,
+        })
+      })
+
+      server.middlewares.use('/api/paypal/debug/failed', async (req, res, next) => {
+        if (req.method !== 'GET') {
+          return next()
+        }
+
+        if (!isPaypalDebugAuthorized(req)) {
+          return sendJson(res, 403, { error: 'Debug access denied.' })
+        }
+
+        const url = new URL(req.url || '/', 'http://localhost')
+        const limit = Number.parseInt(url.searchParams.get('limit') || '20', 10)
+        const offset = Number.parseInt(url.searchParams.get('offset') || '0', 10)
+        const result = getFailedWebhookEvents(limit, offset)
+
+        return sendJson(res, 200, {
+          ok: true,
+          ...result,
         })
       })
     },

@@ -78,6 +78,7 @@ PAYMENTS_STORE_FILE=.payments-store.db
 - Stale `claimed` events are reclaimable after `PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS`
 - Optional diagnostics endpoint is protected by `PAYPAL_DEBUG_TOKEN`
 - Optional manual requeue endpoint (`POST /api/paypal/debug/requeue`) allows retry testing for `failed` events
+- Optional failed-events endpoint (`GET /api/paypal/debug/failed`) lists actionable failed events with pagination
 
 ## Production Checklist
 
