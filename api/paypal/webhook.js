@@ -1,7 +1,9 @@
 import {
   extractOrderIdFromWebhook,
   getPaymentRecord,
+  hasProcessedWebhookEvent,
   readJsonBody,
+  recordWebhookEvent,
   savePaymentRecord,
   sendJson,
   verifyWebhookSignature,
@@ -47,6 +49,10 @@ function mapWebhookToOrderShape(body, existingRecord) {
   };
 }
 
+function getWebhookEventId(body) {
+  return body?.id || null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return sendJson(res, 405, { error: 'Method not allowed.' });
@@ -69,6 +75,20 @@ export default async function handler(req, res) {
       });
     }
 
+    const eventId = getWebhookEventId(body);
+    if (!eventId) {
+      return sendJson(res, 400, { error: 'Missing webhook event ID.' });
+    }
+
+    if (hasProcessedWebhookEvent(eventId)) {
+      return sendJson(res, 200, {
+        received: true,
+        duplicate: true,
+        eventType,
+        eventId,
+      });
+    }
+
     const orderId = extractOrderIdFromWebhook(body);
     if (!orderId) {
       return sendJson(res, 400, { error: 'Unable to determine order ID from webhook payload.' });
@@ -77,10 +97,12 @@ export default async function handler(req, res) {
     const existingRecord = getPaymentRecord(orderId);
     const normalizedOrder = mapWebhookToOrderShape(body, existingRecord);
     const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`);
+    recordWebhookEvent(eventId, eventType, orderId);
 
     return sendJson(res, 200, {
       received: true,
       eventType,
+      eventId,
       orderId,
       updatedStatus: record.status,
       signatureVerified: signature.verified,

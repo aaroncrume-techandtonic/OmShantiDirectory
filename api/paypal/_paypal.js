@@ -239,7 +239,15 @@ function getPaymentsDb() {
       raw_json TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS webhook_events (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT,
+      order_id TEXT,
+      processed_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_payments_updated_at ON payments(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_webhook_events_processed_at ON webhook_events(processed_at);
   `);
 
   paymentsDb = db;
@@ -355,6 +363,39 @@ export function getPaymentRecord(orderId) {
     .get(orderId);
 
   return toPaymentRecord(row);
+}
+
+export function hasProcessedWebhookEvent(eventId) {
+  if (!eventId) {
+    return false;
+  }
+
+  const db = getPaymentsDb();
+  const row = db
+    .prepare('SELECT event_id FROM webhook_events WHERE event_id = ?')
+    .get(eventId);
+
+  return Boolean(row);
+}
+
+export function recordWebhookEvent(eventId, eventType, orderId = null) {
+  if (!eventId) {
+    return false;
+  }
+
+  const db = getPaymentsDb();
+  const result = db
+    .prepare(`
+      INSERT OR IGNORE INTO webhook_events (
+        event_id,
+        event_type,
+        order_id,
+        processed_at
+      ) VALUES (?, ?, ?, ?)
+    `)
+    .run(eventId, eventType || null, orderId || null, new Date().toISOString());
+
+  return result.changes > 0;
 }
 
 export async function verifyWebhookSignature(req, body) {
