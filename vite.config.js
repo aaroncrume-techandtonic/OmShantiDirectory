@@ -11,6 +11,7 @@ import {
   getRecentPayments,
   getRecentWebhookEvents,
   getFailedWebhookEvents,
+  getFailedWebhookSummary,
   getWebhookEventById,
   isPaypalDebugAuthorized,
   markWebhookEventFailed,
@@ -341,6 +342,11 @@ function paypalDevApiPlugin() {
           return next()
         }
 
+        const mountRelativePath = (req.url || '').split('?')[0]
+        if (mountRelativePath.startsWith('/-summary')) {
+          return next()
+        }
+
         if (!isPaypalDebugAuthorized(req)) {
           return sendJson(res, 403, { error: 'Debug access denied.' })
         }
@@ -353,6 +359,25 @@ function paypalDevApiPlugin() {
         return sendJson(res, 200, {
           ok: true,
           ...result,
+        })
+      })
+
+      server.middlewares.use('/api/paypal/debug/failed-summary', async (req, res, next) => {
+        if (req.method !== 'GET') {
+          return next()
+        }
+
+        if (!isPaypalDebugAuthorized(req)) {
+          return sendJson(res, 403, { error: 'Debug access denied.' })
+        }
+
+        const url = new URL(req.url || '/', 'http://localhost')
+        const limit = Number.parseInt(url.searchParams.get('limit') || '10', 10)
+        const summary = getFailedWebhookSummary(limit)
+
+        return sendJson(res, 200, {
+          ok: true,
+          ...summary,
         })
       })
     },

@@ -134,6 +134,12 @@ Before treating this as a production payment system, add:
 - Endpoint: `GET /api/paypal/debug/failed?limit=20&offset=0`
 - Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
 - Returns only `failed` webhook events with pagination metadata: `total`, `limit`, `offset`, `hasMore`
+
+### Failed Summary Endpoint (Optional)
+
+- Endpoint: `GET /api/paypal/debug/failed-summary?limit=10`
+- Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
+- Returns aggregate failed-event diagnostics: `totalFailed`, `latestFailedAt`, `byEventType`, and `byError`
 - membership recovery or account binding
 - operational refund and support workflows
 

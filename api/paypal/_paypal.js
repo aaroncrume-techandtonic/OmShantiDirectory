@@ -579,6 +579,64 @@ export function getFailedWebhookEvents(limit = 20, offset = 0) {
   };
 }
 
+export function getFailedWebhookSummary(limit = 10) {
+  const db = getPaymentsDb();
+  const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 10, 50));
+  const totalFailedRow = db
+    .prepare("SELECT COUNT(*) AS total FROM webhook_events WHERE processing_status = 'failed'")
+    .get();
+
+  const byEventType = db
+    .prepare(`
+      SELECT
+        event_type,
+        COUNT(*) AS count
+      FROM webhook_events
+      WHERE processing_status = 'failed'
+      GROUP BY event_type
+      ORDER BY count DESC
+      LIMIT ?
+    `)
+    .all(safeLimit)
+    .map((row) => ({
+      eventType: row.event_type || 'UNKNOWN',
+      count: Number(row.count || 0),
+    }));
+
+  const byError = db
+    .prepare(`
+      SELECT
+        COALESCE(NULLIF(last_error, ''), 'Unknown error') AS error_message,
+        COUNT(*) AS count
+      FROM webhook_events
+      WHERE processing_status = 'failed'
+      GROUP BY error_message
+      ORDER BY count DESC
+      LIMIT ?
+    `)
+    .all(safeLimit)
+    .map((row) => ({
+      error: row.error_message,
+      count: Number(row.count || 0),
+    }));
+
+  const latestFailed = db
+    .prepare(`
+      SELECT MAX(processed_at) AS latest_failed_at
+      FROM webhook_events
+      WHERE processing_status = 'failed'
+    `)
+    .get();
+
+  return {
+    totalFailed: Number(totalFailedRow?.total || 0),
+    latestFailedAt: latestFailed?.latest_failed_at || null,
+    byEventType,
+    byError,
+    limit: safeLimit,
+  };
+}
+
 export function getWebhookEventById(eventId) {
   if (!eventId) {
     return null;
