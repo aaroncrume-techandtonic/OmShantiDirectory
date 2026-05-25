@@ -378,6 +378,45 @@ export function hasProcessedWebhookEvent(eventId) {
   return Boolean(row);
 }
 
+export function claimWebhookEventProcessing(eventId, eventType) {
+  if (!eventId) {
+    return false;
+  }
+
+  const db = getPaymentsDb();
+  const result = db
+    .prepare(`
+      INSERT OR IGNORE INTO webhook_events (
+        event_id,
+        event_type,
+        order_id,
+        processed_at
+      ) VALUES (?, ?, ?, ?)
+    `)
+    .run(eventId, eventType || null, null, new Date().toISOString());
+
+  if (result.changes > 0) {
+    try {
+      cleanupProcessedWebhookEvents();
+    } catch (error) {
+      console.warn('Failed to cleanup old webhook events:', error);
+    }
+  }
+
+  return result.changes > 0;
+}
+
+export function attachWebhookEventOrderId(eventId, orderId) {
+  if (!eventId || !orderId) {
+    return;
+  }
+
+  const db = getPaymentsDb();
+  db
+    .prepare('UPDATE webhook_events SET order_id = COALESCE(order_id, ?) WHERE event_id = ?')
+    .run(orderId, eventId);
+}
+
 function getWebhookEventRetentionDays() {
   const configuredDays = Number.parseInt(process.env.PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS || '', 10);
   if (Number.isNaN(configuredDays) || configuredDays < 1) {

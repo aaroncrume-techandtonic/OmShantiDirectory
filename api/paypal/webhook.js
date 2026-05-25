@@ -1,9 +1,9 @@
 import {
+  attachWebhookEventOrderId,
+  claimWebhookEventProcessing,
   extractOrderIdFromWebhook,
   getPaymentRecord,
-  hasProcessedWebhookEvent,
   readJsonBody,
-  recordWebhookEvent,
   savePaymentRecord,
   sendJson,
   verifyWebhookSignature,
@@ -80,7 +80,8 @@ export default async function handler(req, res) {
       return sendJson(res, 400, { error: 'Missing webhook event ID.' });
     }
 
-    if (hasProcessedWebhookEvent(eventId)) {
+    const claimed = claimWebhookEventProcessing(eventId, eventType);
+    if (!claimed) {
       return sendJson(res, 200, {
         received: true,
         duplicate: true,
@@ -97,7 +98,7 @@ export default async function handler(req, res) {
     const existingRecord = getPaymentRecord(orderId);
     const normalizedOrder = mapWebhookToOrderShape(body, existingRecord);
     const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`);
-    recordWebhookEvent(eventId, eventType, orderId);
+    attachWebhookEventOrderId(eventId, orderId);
 
     return sendJson(res, 200, {
       received: true,

@@ -1,7 +1,9 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import {
+  attachWebhookEventOrderId,
   capturePaypalOrder,
+  claimWebhookEventProcessing,
   clearMembershipCookie,
   createMembershipSession,
   createPaypalOrder,
@@ -9,10 +11,8 @@ import {
   getPaymentRecord,
   getRecentPayments,
   getRecentWebhookEvents,
-  hasProcessedWebhookEvent,
   isPaypalDebugAuthorized,
   parseCookies,
-  recordWebhookEvent,
   savePaymentRecord,
   verifyWebhookSignature,
   verifyMembershipSession,
@@ -194,7 +194,8 @@ function paypalDevApiPlugin() {
             return sendJson(res, 400, { error: 'Missing webhook event ID.' })
           }
 
-          if (hasProcessedWebhookEvent(eventId)) {
+          const claimed = claimWebhookEventProcessing(eventId, eventType)
+          if (!claimed) {
             return sendJson(res, 200, {
               received: true,
               duplicate: true,
@@ -211,7 +212,7 @@ function paypalDevApiPlugin() {
           const existingRecord = getPaymentRecord(orderId)
           const normalizedOrder = mapWebhookToOrderShape(body, existingRecord)
           const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`)
-          recordWebhookEvent(eventId, eventType, orderId)
+          attachWebhookEventOrderId(eventId, orderId)
 
           return sendJson(res, 200, {
             received: true,
