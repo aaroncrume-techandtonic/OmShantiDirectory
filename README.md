@@ -52,9 +52,13 @@ MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
 PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS=30
 PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS=300
+PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY=false
 PAYPAL_DEBUG_TOKEN=SET_A_LONG_RANDOM_DEBUG_TOKEN
 PAYMENTS_STORE_FILE=.payments-store.db
 ```
+
+`PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY` is a local troubleshooting switch for sandbox testing only.
+Keep it `false` for normal development and never enable it in production.
 
 ### Run locally
 
@@ -107,6 +111,7 @@ Before treating this as a production payment system, add:
 - webhook events now track `claimed`/`processed`/`failed` state, and failed deliveries are retriable
 - stale `claimed` webhook events are reclaimable after `PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS`
 - optional diagnostics endpoint token via `PAYPAL_DEBUG_TOKEN`
+- optional local-only webhook signature bypass via `PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY=true` (do not use in production)
 
 Storage backend behavior:
 

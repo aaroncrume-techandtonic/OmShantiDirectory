@@ -43,9 +43,13 @@ MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
 PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS=30
 PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS=300
+PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY=false
 PAYPAL_DEBUG_TOKEN=SET_A_LONG_RANDOM_DEBUG_TOKEN
 PAYMENTS_STORE_FILE=.payments-store.db
 ```
+
+`PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY` is for local sandbox troubleshooting only.
+Use `true` only when checkout/webhook testing is blocked, and keep it `false` in production.
 
 ### Step 5: Test Payment (Sandbox Mode)
 1. Reload `http://localhost:5173/`
@@ -110,6 +114,7 @@ Before going live:
 - Local SQLite file-backed payment store is not a managed production database
 - Entitlements are session-cookie based but not yet tied to an account system
 - Webhook verification is skipped when `PAYPAL_WEBHOOK_ID` is not configured
+- Webhook verification can be explicitly bypassed locally with `PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY=true` (never use this in production)
 
 ✅ **Good For:**
 - Development & testing
