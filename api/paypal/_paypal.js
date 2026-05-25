@@ -339,6 +339,11 @@ function toPaymentRecord(row) {
   }
 
   try {
+    const rawPayload =
+      typeof row.raw_json === 'string'
+        ? JSON.parse(row.raw_json)
+        : row.raw_json;
+
     return {
       orderId: row.order_id,
       status: row.status,
@@ -349,7 +354,7 @@ function toPaymentRecord(row) {
       currency: row.currency,
       source: row.source,
       updatedAt: row.updated_at,
-      raw: JSON.parse(row.raw_json),
+      raw: rawPayload,
     };
   } catch {
     return null;
