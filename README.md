@@ -140,6 +140,14 @@ Before treating this as a production payment system, add:
 - Endpoint: `GET /api/paypal/debug/failed-summary?limit=10`
 - Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
 - Returns aggregate failed-event diagnostics: `totalFailed`, `latestFailedAt`, `byEventType`, and `byError`
+
+### Failed Purge Endpoint (Optional)
+
+- Endpoint: `POST /api/paypal/debug/failed/purge`
+- Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
+- JSON body: `{ "olderThanDays": 30, "limit": 500, "dryRun": true }`
+- Dry run (`dryRun: true`) returns candidate count and sample IDs without deleting rows
+- Execute (`dryRun: false`) deletes matching failed rows and returns `deletedCount`
 - membership recovery or account binding
 - operational refund and support workflows
 

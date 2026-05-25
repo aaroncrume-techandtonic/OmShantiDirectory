@@ -17,6 +17,7 @@ import {
   markWebhookEventFailed,
   markWebhookEventProcessed,
   parseCookies,
+  purgeFailedWebhookEvents,
   requeueFailedWebhookEvents,
   requeueFailedWebhookEvent,
   savePaymentRecord,
@@ -343,7 +344,7 @@ function paypalDevApiPlugin() {
         }
 
         const mountRelativePath = (req.url || '').split('?')[0]
-        if (mountRelativePath.startsWith('/-summary')) {
+        if (mountRelativePath.startsWith('/-summary') || mountRelativePath.startsWith('/purge')) {
           return next()
         }
 
@@ -378,6 +379,27 @@ function paypalDevApiPlugin() {
         return sendJson(res, 200, {
           ok: true,
           ...summary,
+        })
+      })
+
+      server.middlewares.use('/api/paypal/debug/failed/purge', async (req, res, next) => {
+        if (req.method !== 'POST') {
+          return next()
+        }
+
+        if (!isPaypalDebugAuthorized(req)) {
+          return sendJson(res, 403, { error: 'Debug access denied.' })
+        }
+
+        const body = await readRequestBody(req)
+        const olderThanDays = Number.parseInt(String(body?.olderThanDays ?? 30), 10)
+        const limit = Number.parseInt(String(body?.limit ?? 500), 10)
+        const dryRun = body?.dryRun !== false
+        const result = purgeFailedWebhookEvents(olderThanDays, dryRun, limit)
+
+        return sendJson(res, 200, {
+          ok: true,
+          ...result,
         })
       })
     },

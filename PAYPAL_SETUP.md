@@ -81,6 +81,7 @@ PAYMENTS_STORE_FILE=.payments-store.db
 - Optional failed-events endpoint (`GET /api/paypal/debug/failed`) lists actionable failed events with pagination
 - Optional batch requeue endpoint (`POST /api/paypal/debug/requeue-batch`) retries a paged slice of failed events
 - Optional failed-summary endpoint (`GET /api/paypal/debug/failed-summary`) returns grouped failure diagnostics for triage
+- Optional failed-purge endpoint (`POST /api/paypal/debug/failed/purge`) supports dry-run and cleanup of old failed rows
 
 ## Production Checklist
 

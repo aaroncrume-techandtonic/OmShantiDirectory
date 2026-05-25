@@ -637,6 +637,46 @@ export function getFailedWebhookSummary(limit = 10) {
   };
 }
 
+export function purgeFailedWebhookEvents(olderThanDays = 30, dryRun = true, limit = 500) {
+  const db = getPaymentsDb();
+  const parsedDays = Number.parseInt(String(olderThanDays), 10);
+  const safeDays = Number.isNaN(parsedDays) || parsedDays < 0 ? 30 : parsedDays;
+  const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 500, 5000));
+  const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const candidates = db
+    .prepare(`
+      SELECT event_id
+      FROM webhook_events
+      WHERE processing_status = 'failed'
+        AND processed_at < ?
+      ORDER BY processed_at ASC
+      LIMIT ?
+    `)
+    .all(cutoff, safeLimit)
+    .map((row) => row.event_id)
+    .filter(Boolean);
+
+  let deletedCount = 0;
+  if (!dryRun && candidates.length > 0) {
+    const placeholders = candidates.map(() => '?').join(', ');
+    const result = db
+      .prepare(`DELETE FROM webhook_events WHERE event_id IN (${placeholders})`)
+      .run(...candidates);
+    deletedCount = Number(result?.changes || 0);
+  }
+
+  return {
+    dryRun: Boolean(dryRun),
+    olderThanDays: safeDays,
+    limit: safeLimit,
+    candidateCount: candidates.length,
+    deletedCount,
+    sampleEventIds: candidates.slice(0, 20),
+    cutoff,
+  };
+}
+
 export function getWebhookEventById(eventId) {
   if (!eventId) {
     return null;
