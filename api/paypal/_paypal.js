@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 const PAYPAL_API_BASE = {
   sandbox: 'https://api-m.sandbox.paypal.com',
@@ -196,42 +197,76 @@ export function sendJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function getStoragePath() {
+function getPaymentsDbPath() {
   const configuredPath = process.env.PAYMENTS_STORE_FILE;
   if (configuredPath) {
     return configuredPath;
   }
 
   if (process.env.VERCEL) {
-    return '/tmp/omshanti-payments.json';
+    return '/tmp/omshanti-payments.db';
   }
 
-  return `${process.cwd()}/.payments-store.json`;
+  return `${process.cwd()}/.payments-store.db`;
 }
 
-function readPaymentStore() {
-  const filePath = getStoragePath();
+let paymentsDb = null;
 
-  if (!fs.existsSync(filePath)) {
-    return {};
+function getPaymentsDb() {
+  if (paymentsDb) {
+    return paymentsDb;
   }
 
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-function writePaymentStore(store) {
-  const filePath = getStoragePath();
-  const directory = path.dirname(filePath);
+  const dbPath = getPaymentsDbPath();
+  const directory = path.dirname(dbPath);
 
   if (!fs.existsSync(directory)) {
     fs.mkdirSync(directory, { recursive: true });
   }
 
-  fs.writeFileSync(filePath, JSON.stringify(store, null, 2), 'utf8');
+  const db = new DatabaseSync(dbPath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS payments (
+      order_id TEXT PRIMARY KEY,
+      status TEXT,
+      payer_email TEXT,
+      payer_id TEXT,
+      capture_id TEXT,
+      amount TEXT,
+      currency TEXT,
+      source TEXT,
+      updated_at TEXT,
+      raw_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_payments_updated_at ON payments(updated_at);
+  `);
+
+  paymentsDb = db;
+  return paymentsDb;
+}
+
+function toPaymentRecord(row) {
+  if (!row) {
+    return null;
+  }
+
+  try {
+    return {
+      orderId: row.order_id,
+      status: row.status,
+      payerEmail: row.payer_email,
+      payerId: row.payer_id,
+      captureId: row.capture_id,
+      amount: row.amount,
+      currency: row.currency,
+      source: row.source,
+      updatedAt: row.updated_at,
+      raw: JSON.parse(row.raw_json),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function normalizeOrderRecord(order, source) {
@@ -251,15 +286,48 @@ function normalizeOrderRecord(order, source) {
 }
 
 export function savePaymentRecord(order, source = 'capture') {
-  const store = readPaymentStore();
+  const db = getPaymentsDb();
   const record = normalizeOrderRecord(order, source);
-  store[record.orderId] = {
-    ...(store[record.orderId] || {}),
-    ...record,
-    raw: order,
-  };
-  writePaymentStore(store);
-  return store[record.orderId];
+
+  const statement = db.prepare(`
+    INSERT INTO payments (
+      order_id,
+      status,
+      payer_email,
+      payer_id,
+      capture_id,
+      amount,
+      currency,
+      source,
+      updated_at,
+      raw_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(order_id) DO UPDATE SET
+      status = excluded.status,
+      payer_email = excluded.payer_email,
+      payer_id = excluded.payer_id,
+      capture_id = excluded.capture_id,
+      amount = excluded.amount,
+      currency = excluded.currency,
+      source = excluded.source,
+      updated_at = excluded.updated_at,
+      raw_json = excluded.raw_json
+  `);
+
+  statement.run(
+    record.orderId,
+    record.status,
+    record.payerEmail,
+    record.payerId,
+    record.captureId,
+    record.amount,
+    record.currency,
+    record.source,
+    record.updatedAt,
+    JSON.stringify(order),
+  );
+
+  return getPaymentRecord(record.orderId);
 }
 
 export function getPaymentRecord(orderId) {
@@ -267,8 +335,26 @@ export function getPaymentRecord(orderId) {
     return null;
   }
 
-  const store = readPaymentStore();
-  return store[orderId] || null;
+  const db = getPaymentsDb();
+  const row = db
+    .prepare(`
+      SELECT
+        order_id,
+        status,
+        payer_email,
+        payer_id,
+        capture_id,
+        amount,
+        currency,
+        source,
+        updated_at,
+        raw_json
+      FROM payments
+      WHERE order_id = ?
+    `)
+    .get(orderId);
+
+  return toPaymentRecord(row);
 }
 
 export async function verifyWebhookSignature(req, body) {

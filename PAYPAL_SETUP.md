@@ -41,7 +41,7 @@ PAYPAL_CLIENT_SECRET=YOUR_PAYPAL_CLIENT_SECRET
 PAYPAL_ENV=sandbox
 MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
-PAYMENTS_STORE_FILE=.payments-store.json
+PAYMENTS_STORE_FILE=.payments-store.db
 ```
 
 ### Step 5: Test Payment (Sandbox Mode)
@@ -69,7 +69,7 @@ PAYMENTS_STORE_FILE=.payments-store.json
 **Membership Persistence:**
 - Server issues a signed session cookie named `om_shanti_membership`
 - App checks `/api/membership/session` on load
-- Payment records are written to the configured store file (`PAYMENTS_STORE_FILE`)
+- Payment records are written to the configured SQLite database file (`PAYMENTS_STORE_FILE`)
 
 ## Production Checklist
 
@@ -87,7 +87,7 @@ Before going live:
 ## Current Limitations (Sandbox/MVP)
 
 🔒 **Current Boundaries:**
-- Local file-backed payment store is not a managed production database
+- Local SQLite file-backed payment store is not a managed production database
 - Entitlements are session-cookie based but not yet tied to an account system
 - Webhook verification is skipped when `PAYPAL_WEBHOOK_ID` is not configured
 

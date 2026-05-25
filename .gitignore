@@ -15,6 +15,8 @@ akashic-ledger-next
 clerk-nextjs
 my-prisma-postgres-app
 *.local
+.payments-store.db
+.payments-store.json
 
 # Editor directories and files
 .vscode/*
