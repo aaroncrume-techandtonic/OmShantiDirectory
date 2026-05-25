@@ -212,6 +212,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), paypalDevApiPlugin()],
+    server: {
+      allowedHosts: ['.loca.lt', '.localtunnel.me'],
+    },
     build: {
       rollupOptions: {
         output: {
