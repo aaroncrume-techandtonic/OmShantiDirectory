@@ -27,7 +27,8 @@ function parseEnvFile(filePath) {
       value = value.slice(1, -1);
     }
 
-    if (!(key in process.env)) {
+    // Prefer explicit runtime env values, but allow .env files to fill missing/empty keys.
+    if (!(key in process.env) || !process.env[key]) {
       process.env[key] = value;
     }
   }
@@ -50,9 +51,17 @@ async function main() {
   parseEnvFile(path.join(process.cwd(), '.env.local'));
   parseEnvFile(path.join(process.cwd(), '.env'));
 
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl =
+    process.env.DATABASE_URL ||
+    process.env.OMSHANTI_POSTGRES_URL ||
+    process.env.OMSHANTI_DATABASE_URL ||
+    process.env.OMSHANTI_PRISMA_DATABASE_URL;
   if (!databaseUrl) {
     throw new Error('Missing DATABASE_URL. Set it in environment or .env.local before running migration.');
+  }
+
+  if (databaseUrl.startsWith('prisma+')) {
+    throw new Error('DATABASE_URL uses prisma+ protocol. Use a direct Postgres URL (for example OMSHANTI_POSTGRES_URL) for this migration script.');
   }
 
   const sqlitePath = resolveSqlitePath();
