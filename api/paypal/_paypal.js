@@ -9,6 +9,73 @@ const PAYPAL_API_BASE = {
   live: 'https://api-m.paypal.com',
 };
 
+const LOCAL_ENV_FILES = ['.env.local', '.env'];
+
+function readEnvValueFromFiles(name) {
+  for (const fileName of LOCAL_ENV_FILES) {
+    const filePath = path.join(process.cwd(), fileName);
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
+    const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
+
+      const idx = trimmed.indexOf('=');
+      if (idx === -1) {
+        continue;
+      }
+
+      const key = trimmed.slice(0, idx).trim();
+      if (key !== name) {
+        continue;
+      }
+
+      let value = trimmed.slice(idx + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+
+      if (value) {
+        return value;
+      }
+    }
+  }
+
+  return '';
+}
+
+function getEnvValue(name, fallback = '') {
+  const runtimeValue = process.env[name];
+  if (runtimeValue && String(runtimeValue).trim()) {
+    return runtimeValue;
+  }
+
+  const fileValue = readEnvValueFromFiles(name);
+  if (fileValue) {
+    return fileValue;
+  }
+
+  if (fallback && String(fallback).trim()) {
+    return fallback;
+  }
+
+  return '';
+}
+
+function getDatabaseUrl() {
+  return (
+    getEnvValue('DATABASE_URL')
+    || getEnvValue('OMSHANTI_POSTGRES_URL')
+    || getEnvValue('OMSHANTI_DATABASE_URL')
+    || getEnvValue('OMSHANTI_PRISMA_DATABASE_URL')
+  );
+}
+
 function asBase64Url(value) {
   return Buffer.from(value)
     .toString('base64')
@@ -25,7 +92,7 @@ function fromBase64Url(value) {
 }
 
 function getRequiredEnv(name, fallback) {
-  const value = process.env[name] || fallback;
+  const value = getEnvValue(name, fallback);
 
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
@@ -35,9 +102,9 @@ function getRequiredEnv(name, fallback) {
 }
 
 export function getPaypalConfig() {
-  const clientId = getRequiredEnv('PAYPAL_CLIENT_ID', process.env.VITE_PAYPAL_CLIENT_ID);
+  const clientId = getRequiredEnv('PAYPAL_CLIENT_ID', getEnvValue('VITE_PAYPAL_CLIENT_ID'));
   const clientSecret = getRequiredEnv('PAYPAL_CLIENT_SECRET');
-  const env = process.env.PAYPAL_ENV === 'live' ? 'live' : 'sandbox';
+  const env = getEnvValue('PAYPAL_ENV') === 'live' ? 'live' : 'sandbox';
 
   return {
     clientId,
@@ -48,7 +115,7 @@ export function getPaypalConfig() {
 }
 
 export function getMembershipSecret() {
-  return getRequiredEnv('MEMBERSHIP_SESSION_SECRET', process.env.PAYPAL_CLIENT_SECRET);
+  return getRequiredEnv('MEMBERSHIP_SESSION_SECRET', getEnvValue('PAYPAL_CLIENT_SECRET'));
 }
 
 export function parseCookies(req) {
@@ -199,12 +266,12 @@ export function sendJson(res, statusCode, payload) {
 }
 
 function getPaymentsDbPath() {
-  const configuredPath = process.env.PAYMENTS_STORE_FILE;
+  const configuredPath = getEnvValue('PAYMENTS_STORE_FILE');
   if (configuredPath) {
     return configuredPath;
   }
 
-  if (process.env.VERCEL) {
+  if (getEnvValue('VERCEL')) {
     return '/tmp/omshanti-payments.db';
   }
 
@@ -213,18 +280,29 @@ function getPaymentsDbPath() {
 
 let paymentsDb = null;
 let paymentsPgPool = null;
+let paymentsPgPoolConnectionString = null;
 let postgresSchemaReadyPromise = null;
 
 function usePostgresStorage() {
-  return Boolean(process.env.DATABASE_URL);
+  return Boolean(getDatabaseUrl());
 }
 
 function getPaymentsPgPool() {
-  if (paymentsPgPool) {
+  const connectionString = getDatabaseUrl();
+  if (!connectionString) {
+    throw new Error('Missing DATABASE_URL for Postgres storage.');
+  }
+
+  if (paymentsPgPool && paymentsPgPoolConnectionString === connectionString) {
     return paymentsPgPool;
   }
 
-  paymentsPgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  if (paymentsPgPool) {
+    paymentsPgPool.end().catch(() => {});
+  }
+
+  paymentsPgPool = new Pool({ connectionString });
+  paymentsPgPoolConnectionString = connectionString;
   return paymentsPgPool;
 }
 
@@ -527,7 +605,7 @@ export async function claimWebhookEventProcessing(eventId, eventType) {
   }
 
   const now = new Date().toISOString();
-  const timeoutSeconds = Number.parseInt(process.env.PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS || '', 10);
+  const timeoutSeconds = Number.parseInt(getEnvValue('PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS') || '', 10);
   const safeTimeoutSeconds = Number.isNaN(timeoutSeconds) || timeoutSeconds < 30 ? 300 : timeoutSeconds;
   const staleClaimCutoff = new Date(Date.now() - safeTimeoutSeconds * 1000).toISOString();
 
@@ -673,7 +751,7 @@ export async function markWebhookEventFailed(eventId, error) {
 }
 
 function getWebhookEventRetentionDays() {
-  const configuredDays = Number.parseInt(process.env.PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS || '', 10);
+  const configuredDays = Number.parseInt(getEnvValue('PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS') || '', 10);
   if (Number.isNaN(configuredDays) || configuredDays < 1) {
     return 30;
   }
@@ -1234,7 +1312,7 @@ export async function requeueFailedWebhookEvents(limit = 20, offset = 0, reason 
 }
 
 export function isPaypalDebugAuthorized(req) {
-  const configuredToken = process.env.PAYPAL_DEBUG_TOKEN;
+  const configuredToken = getEnvValue('PAYPAL_DEBUG_TOKEN');
   if (!configuredToken) {
     return false;
   }
@@ -1257,7 +1335,7 @@ export function isPaypalDebugAuthorized(req) {
 }
 
 export async function verifyWebhookSignature(req, body) {
-  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+  const webhookId = getEnvValue('PAYPAL_WEBHOOK_ID');
   if (!webhookId) {
     return { verified: false, skipped: true, reason: 'PAYPAL_WEBHOOK_ID not set' };
   }
