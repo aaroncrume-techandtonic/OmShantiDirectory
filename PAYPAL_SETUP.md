@@ -79,6 +79,7 @@ PAYMENTS_STORE_FILE=.payments-store.db
 - Optional diagnostics endpoint is protected by `PAYPAL_DEBUG_TOKEN`
 - Optional manual requeue endpoint (`POST /api/paypal/debug/requeue`) allows retry testing for `failed` events
 - Optional failed-events endpoint (`GET /api/paypal/debug/failed`) lists actionable failed events with pagination
+- Optional batch requeue endpoint (`POST /api/paypal/debug/requeue-batch`) retries a paged slice of failed events
 
 ## Production Checklist
 

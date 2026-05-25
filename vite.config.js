@@ -16,6 +16,7 @@ import {
   markWebhookEventFailed,
   markWebhookEventProcessed,
   parseCookies,
+  requeueFailedWebhookEvents,
   requeueFailedWebhookEvent,
   savePaymentRecord,
   verifyWebhookSignature,
@@ -278,6 +279,11 @@ function paypalDevApiPlugin() {
           return next()
         }
 
+        const mountRelativePath = (req.url || '').split('?')[0]
+        if (mountRelativePath.startsWith('/-batch')) {
+          return next()
+        }
+
         if (!isPaypalDebugAuthorized(req)) {
           return sendJson(res, 403, { error: 'Debug access denied.' })
         }
@@ -306,6 +312,27 @@ function paypalDevApiPlugin() {
         return sendJson(res, 200, {
           ok: true,
           event: requeuedEvent || event,
+        })
+      })
+
+      server.middlewares.use('/api/paypal/debug/requeue-batch', async (req, res, next) => {
+        if (req.method !== 'POST') {
+          return next()
+        }
+
+        if (!isPaypalDebugAuthorized(req)) {
+          return sendJson(res, 403, { error: 'Debug access denied.' })
+        }
+
+        const body = await readRequestBody(req)
+        const limit = Number.parseInt(String(body?.limit ?? 20), 10)
+        const offset = Number.parseInt(String(body?.offset ?? 0), 10)
+        const reason = body?.reason || 'Manual batch requeue requested'
+        const result = requeueFailedWebhookEvents(limit, offset, reason)
+
+        return sendJson(res, 200, {
+          ok: true,
+          ...result,
         })
       })
 

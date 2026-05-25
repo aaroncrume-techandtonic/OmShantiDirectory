@@ -639,6 +639,29 @@ export function requeueFailedWebhookEvent(eventId, reason = 'Manual requeue requ
   return getWebhookEventById(eventId);
 }
 
+export function requeueFailedWebhookEvents(limit = 20, offset = 0, reason = 'Manual batch requeue requested') {
+  const failedPage = getFailedWebhookEvents(limit, offset);
+  const safeReason = String(reason || 'Manual batch requeue requested').slice(0, 500);
+  const events = [];
+
+  for (const event of failedPage.items) {
+    const updated = requeueFailedWebhookEvent(event.eventId, safeReason);
+    if (updated) {
+      events.push(updated);
+    }
+  }
+
+  return {
+    requested: failedPage.items.length,
+    requeuedCount: events.length,
+    events,
+    totalFailed: failedPage.total,
+    limit: failedPage.limit,
+    offset: failedPage.offset,
+    hasMore: failedPage.hasMore,
+  };
+}
+
 export function isPaypalDebugAuthorized(req) {
   const configuredToken = process.env.PAYPAL_DEBUG_TOKEN;
   if (!configuredToken) {

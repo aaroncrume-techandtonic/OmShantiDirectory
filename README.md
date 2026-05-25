@@ -122,6 +122,13 @@ Before treating this as a production payment system, add:
 - JSON body: `{ "eventId": "<PAYPAL_WEBHOOK_EVENT_ID>" }`
 - Requeues only `failed` webhook events for controlled recovery testing
 
+### Batch Requeue Endpoint (Optional)
+
+- Endpoint: `POST /api/paypal/debug/requeue-batch`
+- Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
+- JSON body: `{ "limit": 20, "offset": 0, "reason": "<optional reason>" }`
+- Requeues a page of `failed` events and returns `requeuedCount`, `events`, and paging metadata
+
 ### Failed Events Endpoint (Optional)
 
 - Endpoint: `GET /api/paypal/debug/failed?limit=20&offset=0`
