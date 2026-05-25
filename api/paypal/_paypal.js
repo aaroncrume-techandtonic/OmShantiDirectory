@@ -378,6 +378,25 @@ export function hasProcessedWebhookEvent(eventId) {
   return Boolean(row);
 }
 
+function getWebhookEventRetentionDays() {
+  const configuredDays = Number.parseInt(process.env.PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS || '', 10);
+  if (Number.isNaN(configuredDays) || configuredDays < 1) {
+    return 30;
+  }
+
+  return configuredDays;
+}
+
+export function cleanupProcessedWebhookEvents(retentionDays = getWebhookEventRetentionDays()) {
+  const db = getPaymentsDb();
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const result = db
+    .prepare('DELETE FROM webhook_events WHERE processed_at < ?')
+    .run(cutoff);
+
+  return result.changes;
+}
+
 export function recordWebhookEvent(eventId, eventType, orderId = null) {
   if (!eventId) {
     return false;
@@ -394,6 +413,14 @@ export function recordWebhookEvent(eventId, eventType, orderId = null) {
       ) VALUES (?, ?, ?, ?)
     `)
     .run(eventId, eventType || null, orderId || null, new Date().toISOString());
+
+  if (result.changes > 0) {
+    try {
+      cleanupProcessedWebhookEvents();
+    } catch (error) {
+      console.warn('Failed to cleanup old webhook events:', error);
+    }
+  }
 
   return result.changes > 0;
 }

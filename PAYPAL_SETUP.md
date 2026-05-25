@@ -41,6 +41,7 @@ PAYPAL_CLIENT_SECRET=YOUR_PAYPAL_CLIENT_SECRET
 PAYPAL_ENV=sandbox
 MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
+PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS=30
 PAYMENTS_STORE_FILE=.payments-store.db
 ```
 
@@ -70,6 +71,7 @@ PAYMENTS_STORE_FILE=.payments-store.db
 - Server issues a signed session cookie named `om_shanti_membership`
 - App checks `/api/membership/session` on load
 - Payment records are written to the configured SQLite database file (`PAYMENTS_STORE_FILE`)
+- Processed webhook event IDs are retained for replay protection (`PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS`)
 
 ## Production Checklist
 

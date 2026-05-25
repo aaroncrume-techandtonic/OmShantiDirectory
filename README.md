@@ -50,6 +50,7 @@ PAYPAL_CLIENT_SECRET=YOUR_PAYPAL_CLIENT_SECRET
 PAYPAL_ENV=sandbox
 MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
+PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS=30
 PAYMENTS_STORE_FILE=.payments-store.db
 ```
 
@@ -100,6 +101,7 @@ Before treating this as a production payment system, add:
 
 - persistent purchase records in a managed database
 - webhook signature enforcement with `PAYPAL_WEBHOOK_ID`
+- webhook event idempotency with configurable retention via `PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS`
 - membership recovery or account binding
 - operational refund and support workflows
 
