@@ -63,6 +63,12 @@ function getWebhookEventId(body) {
   return body?.id || null
 }
 
+function createHttpError(statusCode, message) {
+  const error = new Error(message)
+  error.statusCode = statusCode
+  return error
+}
+
 function sendJson(res, statusCode, payload) {
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json')
@@ -208,7 +214,7 @@ function paypalDevApiPlugin() {
           try {
             const orderId = extractOrderIdFromWebhook(body)
             if (!orderId) {
-              return sendJson(res, 400, { error: 'Unable to determine order ID from webhook payload.' })
+              throw createHttpError(400, 'Unable to determine order ID from webhook payload.')
             }
 
             const existingRecord = getPaymentRecord(orderId)
@@ -235,7 +241,8 @@ function paypalDevApiPlugin() {
           }
         } catch (error) {
           console.error('PayPal webhook error:', error)
-          return sendJson(res, 500, { error: error.message || 'Failed to process webhook.' })
+          const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500
+          return sendJson(res, statusCode, { error: error.message || 'Failed to process webhook.' })
         }
       })
 

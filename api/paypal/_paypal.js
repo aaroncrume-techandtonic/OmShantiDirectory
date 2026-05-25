@@ -390,6 +390,9 @@ export function claimWebhookEventProcessing(eventId, eventType) {
 
   const db = getPaymentsDb();
   const now = new Date().toISOString();
+  const timeoutSeconds = Number.parseInt(process.env.PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS || '', 10);
+  const safeTimeoutSeconds = Number.isNaN(timeoutSeconds) || timeoutSeconds < 30 ? 300 : timeoutSeconds;
+  const staleClaimCutoff = new Date(Date.now() - safeTimeoutSeconds * 1000).toISOString();
   const result = db
     .prepare(`
       INSERT INTO webhook_events (
@@ -406,8 +409,9 @@ export function claimWebhookEventProcessing(eventId, eventType) {
         last_error = NULL,
         processed_at = excluded.processed_at
       WHERE webhook_events.processing_status = 'failed'
+         OR (webhook_events.processing_status = 'claimed' AND webhook_events.processed_at < ?)
     `)
-    .run(eventId, eventType || null, null, 'claimed', null, now);
+    .run(eventId, eventType || null, null, 'claimed', null, now, staleClaimCutoff);
 
   if (result.changes > 0) {
     try {

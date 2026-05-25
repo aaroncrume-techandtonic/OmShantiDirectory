@@ -42,6 +42,7 @@ PAYPAL_ENV=sandbox
 MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
 PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS=30
+PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS=300
 PAYPAL_DEBUG_TOKEN=SET_A_LONG_RANDOM_DEBUG_TOKEN
 PAYMENTS_STORE_FILE=.payments-store.db
 ```
@@ -74,6 +75,7 @@ PAYMENTS_STORE_FILE=.payments-store.db
 - Payment records are written to the configured SQLite database file (`PAYMENTS_STORE_FILE`)
 - Processed webhook event IDs are retained for replay protection (`PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS`)
 - Webhook events are status-tracked (`claimed`, `processed`, `failed`) so failed deliveries can be retried safely
+- Stale `claimed` events are reclaimable after `PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS`
 - Optional diagnostics endpoint is protected by `PAYPAL_DEBUG_TOKEN`
 
 ## Production Checklist

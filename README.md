@@ -51,6 +51,7 @@ PAYPAL_ENV=sandbox
 MEMBERSHIP_SESSION_SECRET=SET_A_LONG_RANDOM_SECRET
 PAYPAL_WEBHOOK_ID=YOUR_PAYPAL_WEBHOOK_ID
 PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS=30
+PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS=300
 PAYPAL_DEBUG_TOKEN=SET_A_LONG_RANDOM_DEBUG_TOKEN
 PAYMENTS_STORE_FILE=.payments-store.db
 ```
@@ -104,6 +105,7 @@ Before treating this as a production payment system, add:
 - webhook signature enforcement with `PAYPAL_WEBHOOK_ID`
 - webhook event idempotency with configurable retention via `PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS`
 - webhook events now track `claimed`/`processed`/`failed` state, and failed deliveries are retriable
+- stale `claimed` webhook events are reclaimable after `PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS`
 - optional diagnostics endpoint token via `PAYPAL_DEBUG_TOKEN`
 
 ### Debug Endpoint (Optional)
