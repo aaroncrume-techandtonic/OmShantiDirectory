@@ -73,6 +73,7 @@ PAYMENTS_STORE_FILE=.payments-store.db
 - App checks `/api/membership/session` on load
 - Payment records are written to the configured SQLite database file (`PAYMENTS_STORE_FILE`)
 - Processed webhook event IDs are retained for replay protection (`PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS`)
+- Webhook events are status-tracked (`claimed`, `processed`, `failed`) so failed deliveries can be retried safely
 - Optional diagnostics endpoint is protected by `PAYPAL_DEBUG_TOKEN`
 
 ## Production Checklist

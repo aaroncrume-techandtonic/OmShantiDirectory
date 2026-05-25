@@ -103,6 +103,7 @@ Before treating this as a production payment system, add:
 - persistent purchase records in a managed database
 - webhook signature enforcement with `PAYPAL_WEBHOOK_ID`
 - webhook event idempotency with configurable retention via `PAYPAL_WEBHOOK_EVENT_RETENTION_DAYS`
+- webhook events now track `claimed`/`processed`/`failed` state, and failed deliveries are retriable
 - optional diagnostics endpoint token via `PAYPAL_DEBUG_TOKEN`
 
 ### Debug Endpoint (Optional)
@@ -110,6 +111,7 @@ Before treating this as a production payment system, add:
 - Endpoint: `GET /api/paypal/debug?limit=20`
 - Header: `x-paypal-debug-token: <PAYPAL_DEBUG_TOKEN>`
 - Response includes recent `payments` and `webhookEvents` rows for troubleshooting
+- `webhookEvents` rows include `processingStatus` and `lastError` fields
 - membership recovery or account binding
 - operational refund and support workflows
 

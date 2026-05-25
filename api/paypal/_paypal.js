@@ -212,6 +212,19 @@ function getPaymentsDbPath() {
 
 let paymentsDb = null;
 
+function ensureWebhookEventsSchema(db) {
+  const columns = db.prepare('PRAGMA table_info(webhook_events)').all();
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has('processing_status')) {
+    db.exec("ALTER TABLE webhook_events ADD COLUMN processing_status TEXT NOT NULL DEFAULT 'processed'");
+  }
+
+  if (!columnNames.has('last_error')) {
+    db.exec('ALTER TABLE webhook_events ADD COLUMN last_error TEXT');
+  }
+}
+
 function getPaymentsDb() {
   if (paymentsDb) {
     return paymentsDb;
@@ -243,12 +256,17 @@ function getPaymentsDb() {
       event_id TEXT PRIMARY KEY,
       event_type TEXT,
       order_id TEXT,
+      processing_status TEXT NOT NULL DEFAULT 'processed',
+      last_error TEXT,
       processed_at TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_payments_updated_at ON payments(updated_at);
     CREATE INDEX IF NOT EXISTS idx_webhook_events_processed_at ON webhook_events(processed_at);
   `);
+
+  ensureWebhookEventsSchema(db);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON webhook_events(processing_status)');
 
   paymentsDb = db;
   return paymentsDb;
@@ -365,35 +383,31 @@ export function getPaymentRecord(orderId) {
   return toPaymentRecord(row);
 }
 
-export function hasProcessedWebhookEvent(eventId) {
-  if (!eventId) {
-    return false;
-  }
-
-  const db = getPaymentsDb();
-  const row = db
-    .prepare('SELECT event_id FROM webhook_events WHERE event_id = ?')
-    .get(eventId);
-
-  return Boolean(row);
-}
-
 export function claimWebhookEventProcessing(eventId, eventType) {
   if (!eventId) {
     return false;
   }
 
   const db = getPaymentsDb();
+  const now = new Date().toISOString();
   const result = db
     .prepare(`
-      INSERT OR IGNORE INTO webhook_events (
+      INSERT INTO webhook_events (
         event_id,
         event_type,
         order_id,
+        processing_status,
+        last_error,
         processed_at
-      ) VALUES (?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(event_id) DO UPDATE SET
+        event_type = excluded.event_type,
+        processing_status = 'claimed',
+        last_error = NULL,
+        processed_at = excluded.processed_at
+      WHERE webhook_events.processing_status = 'failed'
     `)
-    .run(eventId, eventType || null, null, new Date().toISOString());
+    .run(eventId, eventType || null, null, 'claimed', null, now);
 
   if (result.changes > 0) {
     try {
@@ -406,15 +420,42 @@ export function claimWebhookEventProcessing(eventId, eventType) {
   return result.changes > 0;
 }
 
-export function attachWebhookEventOrderId(eventId, orderId) {
-  if (!eventId || !orderId) {
+export function markWebhookEventProcessed(eventId, orderId = null) {
+  if (!eventId) {
     return;
   }
 
   const db = getPaymentsDb();
   db
-    .prepare('UPDATE webhook_events SET order_id = COALESCE(order_id, ?) WHERE event_id = ?')
-    .run(orderId, eventId);
+    .prepare(`
+      UPDATE webhook_events
+      SET
+        order_id = COALESCE(order_id, ?),
+        processing_status = 'processed',
+        last_error = NULL,
+        processed_at = ?
+      WHERE event_id = ?
+    `)
+    .run(orderId, new Date().toISOString(), eventId);
+}
+
+export function markWebhookEventFailed(eventId, error) {
+  if (!eventId) {
+    return;
+  }
+
+  const message = String(error?.message || error || 'Webhook processing failed').slice(0, 500);
+  const db = getPaymentsDb();
+  db
+    .prepare(`
+      UPDATE webhook_events
+      SET
+        processing_status = 'failed',
+        last_error = ?,
+        processed_at = ?
+      WHERE event_id = ?
+    `)
+    .run(message, new Date().toISOString(), eventId);
 }
 
 function getWebhookEventRetentionDays() {
@@ -471,6 +512,8 @@ export function getRecentWebhookEvents(limit = 20) {
         event_id,
         event_type,
         order_id,
+        processing_status,
+        last_error,
         processed_at
       FROM webhook_events
       ORDER BY processed_at DESC
@@ -481,6 +524,8 @@ export function getRecentWebhookEvents(limit = 20) {
       eventId: row.event_id,
       eventType: row.event_type,
       orderId: row.order_id,
+      processingStatus: row.processing_status,
+      lastError: row.last_error,
       processedAt: row.processed_at,
     }));
 }
@@ -506,34 +551,6 @@ export function isPaypalDebugAuthorized(req) {
   }
 
   return crypto.timingSafeEqual(providedBuffer, configuredBuffer);
-}
-
-export function recordWebhookEvent(eventId, eventType, orderId = null) {
-  if (!eventId) {
-    return false;
-  }
-
-  const db = getPaymentsDb();
-  const result = db
-    .prepare(`
-      INSERT OR IGNORE INTO webhook_events (
-        event_id,
-        event_type,
-        order_id,
-        processed_at
-      ) VALUES (?, ?, ?, ?)
-    `)
-    .run(eventId, eventType || null, orderId || null, new Date().toISOString());
-
-  if (result.changes > 0) {
-    try {
-      cleanupProcessedWebhookEvents();
-    } catch (error) {
-      console.warn('Failed to cleanup old webhook events:', error);
-    }
-  }
-
-  return result.changes > 0;
 }
 
 export async function verifyWebhookSignature(req, body) {

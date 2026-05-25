@@ -1,8 +1,9 @@
 import {
-  attachWebhookEventOrderId,
   claimWebhookEventProcessing,
   extractOrderIdFromWebhook,
   getPaymentRecord,
+  markWebhookEventFailed,
+  markWebhookEventProcessed,
   readJsonBody,
   savePaymentRecord,
   sendJson,
@@ -90,25 +91,34 @@ export default async function handler(req, res) {
       });
     }
 
-    const orderId = extractOrderIdFromWebhook(body);
-    if (!orderId) {
-      return sendJson(res, 400, { error: 'Unable to determine order ID from webhook payload.' });
+    try {
+      const orderId = extractOrderIdFromWebhook(body);
+      if (!orderId) {
+        return sendJson(res, 400, { error: 'Unable to determine order ID from webhook payload.' });
+      }
+
+      const existingRecord = getPaymentRecord(orderId);
+      const normalizedOrder = mapWebhookToOrderShape(body, existingRecord);
+      const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`);
+      markWebhookEventProcessed(eventId, orderId);
+
+      return sendJson(res, 200, {
+        received: true,
+        eventType,
+        eventId,
+        orderId,
+        updatedStatus: record.status,
+        signatureVerified: signature.verified,
+        signatureVerificationSkipped: signature.skipped,
+      });
+    } catch (error) {
+      try {
+        markWebhookEventFailed(eventId, error);
+      } catch (markError) {
+        console.warn('Failed to mark webhook event as failed:', markError);
+      }
+      throw error;
     }
-
-    const existingRecord = getPaymentRecord(orderId);
-    const normalizedOrder = mapWebhookToOrderShape(body, existingRecord);
-    const record = savePaymentRecord(normalizedOrder, `webhook:${eventType}`);
-    attachWebhookEventOrderId(eventId, orderId);
-
-    return sendJson(res, 200, {
-      received: true,
-      eventType,
-      eventId,
-      orderId,
-      updatedStatus: record.status,
-      signatureVerified: signature.verified,
-      signatureVerificationSkipped: signature.skipped,
-    });
   } catch (error) {
     console.error('PayPal webhook error:', error);
     return sendJson(res, 500, { error: error.message || 'Failed to process webhook.' });
