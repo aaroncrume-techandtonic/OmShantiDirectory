@@ -106,6 +106,24 @@ Notes:
 - Localtunnel can assign a different URL if your requested subdomain is unavailable.
 - If the URL changes, update the webhook URL in the PayPal sandbox app.
 
+### Step 5.2: Run webhook smoke verification
+
+After `npm run dev:tunnel` prints the active URL, run:
+
+```bash
+# PowerShell
+$env:TUNNEL_BASE_URL="https://your-current-subdomain.loca.lt"
+npm run smoke:webhook
+
+# bash/zsh
+TUNNEL_BASE_URL=https://your-current-subdomain.loca.lt npm run smoke:webhook
+```
+
+Expected result:
+
+- webhook POST returns `received: true`
+- debug lookup finds the same event ID with `processingStatus: processed`
+
 ### Step 6: Optional SQLite -> Postgres Migration Start
 
 1. Set `DATABASE_URL` in `.env.local`
