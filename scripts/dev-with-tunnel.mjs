@@ -10,6 +10,14 @@ function npxCommand() {
 }
 
 function startProcess(command, args, options = {}) {
+  if (process.platform === 'win32') {
+    return spawn('cmd.exe', ['/d', '/s', '/c', command, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      ...options,
+    });
+  }
+
   return spawn(command, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
