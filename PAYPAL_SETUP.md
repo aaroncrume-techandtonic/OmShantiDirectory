@@ -124,6 +124,21 @@ Expected result:
 - webhook POST returns `received: true`
 - debug lookup finds the same event ID with `processingStatus: processed`
 
+### Step 5.3: Full auto mode (recommended)
+
+Use one command to start dev + tunnel and automatically run the smoke check whenever a new tunnel URL appears:
+
+```bash
+npm run dev:tunnel:smoke
+```
+
+What it does:
+
+- runs `npm run dev:tunnel`
+- waits for the printed tunnel URL
+- runs `npm run smoke:webhook` with `TUNNEL_BASE_URL` set to that URL
+- keeps dev/tunnel running after smoke passes
+
 ### Step 6: Optional SQLite -> Postgres Migration Start
 
 1. Set `DATABASE_URL` in `.env.local`

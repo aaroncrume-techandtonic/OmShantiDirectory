@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:tunnel": "node scripts/dev-with-tunnel.mjs",
+    "dev:tunnel:smoke": "node scripts/dev-tunnel-smoke.mjs",
     "smoke:webhook": "node scripts/smoke-paypal-webhook.mjs",
     "build": "vite build",
     "test": "node --test test/paypal-api.test.js",
