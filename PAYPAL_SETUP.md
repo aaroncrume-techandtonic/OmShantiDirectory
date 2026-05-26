@@ -82,6 +82,30 @@ Notes:
 4. After successful payment, you'll be redirected to the app
 5. Membership is stored in localStorage
 
+### Step 5.1: One-command dev + tunnel workflow
+
+Use this when you need the webhook listener publicly reachable while running local dev:
+
+```bash
+npm run dev:tunnel
+```
+
+What it does:
+
+- starts `vite` locally
+- starts `localtunnel` on `TUNNEL_PORT` (default `5173`)
+- prints the active tunnel URL and webhook URL
+
+Optional env knobs in `.env.local`:
+
+- `LT_SUBDOMAIN` to request a preferred localtunnel subdomain
+- `TUNNEL_PORT` to tunnel a different local port
+
+Notes:
+
+- Localtunnel can assign a different URL if your requested subdomain is unavailable.
+- If the URL changes, update the webhook URL in the PayPal sandbox app.
+
 ### Step 6: Optional SQLite -> Postgres Migration Start
 
 1. Set `DATABASE_URL` in `.env.local`

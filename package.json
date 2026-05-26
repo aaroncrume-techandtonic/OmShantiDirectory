@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:tunnel": "node scripts/dev-with-tunnel.mjs",
     "build": "vite build",
     "test": "node --test test/paypal-api.test.js",
     "lint": "eslint .",
