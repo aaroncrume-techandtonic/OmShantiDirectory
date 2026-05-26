@@ -114,6 +114,22 @@ Before treating this as a production payment system, add:
 - stale `claimed` webhook events are reclaimable after `PAYPAL_WEBHOOK_CLAIM_TIMEOUT_SECONDS`
 - optional diagnostics endpoint token via `PAYPAL_DEBUG_TOKEN`
 - optional local-only webhook signature bypass via `PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY=true` (do not use in production)
+- tighten webhook subscriptions to events your backend actively handles
+
+Recommended webhook event subscriptions for this app:
+
+- `CHECKOUT.ORDER.COMPLETED`
+- `CHECKOUT.ORDER.APPROVED`
+- `CHECKOUT.ORDER.DECLINED`
+- `CHECKOUT.ORDER.SAVED`
+- `CHECKOUT.ORDER.VOIDED`
+- `PAYMENT.CAPTURE.COMPLETED`
+- `PAYMENT.CAPTURE.PENDING`
+- `PAYMENT.CAPTURE.DENIED`
+- `PAYMENT.CAPTURE.REFUNDED`
+- `PAYMENT.CAPTURE.REVERSED`
+
+The webhook handler ignores unrelated event types.
 
 Storage backend behavior:
 
@@ -160,6 +176,9 @@ Storage backend behavior:
 - JSON body: `{ "olderThanDays": 30, "limit": 500, "dryRun": true }`
 - Dry run (`dryRun: true`) returns candidate count and sample IDs without deleting rows
 - Execute (`dryRun: false`) deletes matching failed rows and returns `deletedCount`
+
+Natural next production features after payment hardening:
+
 - membership recovery or account binding
 - operational refund and support workflows
 

@@ -51,6 +51,28 @@ PAYMENTS_STORE_FILE=.payments-store.db
 `PAYPAL_SKIP_WEBHOOK_SIGNATURE_VERIFY` is for local sandbox troubleshooting only.
 Use `true` only when checkout/webhook testing is blocked, and keep it `false` in production.
 
+### Step 4.1: Configure webhook events for this app
+
+In your PayPal app settings, configure a webhook URL to your backend listener (`/api/paypal/webhook`) and subscribe to these events:
+
+- `CHECKOUT.ORDER.COMPLETED`
+- `CHECKOUT.ORDER.APPROVED`
+- `CHECKOUT.ORDER.DECLINED`
+- `CHECKOUT.ORDER.SAVED`
+- `CHECKOUT.ORDER.VOIDED`
+- `PAYMENT.CAPTURE.COMPLETED`
+- `PAYMENT.CAPTURE.PENDING`
+- `PAYMENT.CAPTURE.DENIED`
+- `PAYMENT.CAPTURE.REFUNDED`
+- `PAYMENT.CAPTURE.REVERSED`
+
+After you create the webhook in the PayPal dashboard, copy its **Webhook ID** into `PAYPAL_WEBHOOK_ID`.
+
+Notes:
+
+- The handler ignores unrelated event types.
+- Do not reuse production webhook IDs in sandbox.
+
 ### Step 5: Test Payment (Sandbox Mode)
 1. Reload `http://localhost:5173/`
 2. Click the PayPal button
