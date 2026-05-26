@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test test/paypal-api.test.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "db:migrate:sqlite-to-postgres": "node scripts/migrate-sqlite-to-postgres.mjs"

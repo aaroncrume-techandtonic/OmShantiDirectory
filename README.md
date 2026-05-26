@@ -1,5 +1,7 @@
 # OmShantiDirectory
 
+[![CI](https://github.com/aaroncrume-techandtonic/OmShantiDirectory/actions/workflows/ci.yml/badge.svg)](https://github.com/aaroncrume-techandtonic/OmShantiDirectory/actions/workflows/ci.yml)
+
 OmShantiDirectory is a Vite + React application for guided spiritual learning. It combines a searchable directory experience with sequential module progression, persistent audio playback, protocol forms, and cinematic looping video backdrops.
 
 ## What the app does
