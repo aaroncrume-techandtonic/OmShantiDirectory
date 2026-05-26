@@ -132,6 +132,53 @@ test('webhook processes tracked event, persists payment, and detects duplicate d
   assert.ok(debugRes.payload.webhookEvents.some((event) => event.eventId === eventId));
 });
 
+test('webhook processes checkout order completed events from app-level webhook subscriptions', async () => {
+  const eventId = `evt-checkout-${Date.now()}`;
+  const orderId = `ORDER-CHECKOUT-${Date.now()}`;
+
+  const res = createRes();
+  await webhookHandler(
+    createReq({
+      method: 'POST',
+      body: {
+        id: eventId,
+        event_type: 'CHECKOUT.ORDER.COMPLETED',
+        resource: {
+          id: orderId,
+          status: 'COMPLETED',
+          purchase_units: [
+            {
+              amount: {
+                currency_code: 'USD',
+                value: '19.99',
+              },
+            },
+          ],
+        },
+      },
+    }),
+    res,
+  );
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload?.received, true);
+  assert.equal(res.payload?.eventType, 'CHECKOUT.ORDER.COMPLETED');
+  assert.equal(res.payload?.orderId, orderId);
+
+  const debugRes = createRes();
+  await debugHandler(
+    createReq({
+      method: 'GET',
+      url: 'http://localhost/api/paypal/debug?limit=50',
+      headers: { 'x-paypal-debug-token': 'test-debug-token' },
+    }),
+    debugRes,
+  );
+
+  assert.equal(debugRes.statusCode, 200);
+  assert.ok(debugRes.payload?.payments.some((payment) => payment.orderId === orderId));
+});
+
 test('webhook marks tracked event failed when order id cannot be determined', async () => {
   const eventId = `evt-failed-${Date.now()}`;
   const res = createRes();
