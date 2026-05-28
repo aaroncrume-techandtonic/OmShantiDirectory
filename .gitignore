@@ -14,6 +14,9 @@ dist-ssr
 akashic-ledger-next
 clerk-nextjs
 my-prisma-postgres-app
+indigenous-pages
+migratebea
+tech-and-tonic-portfolio
 *.local
 .payments-store.db
 .payments-store.json
