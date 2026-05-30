@@ -1,55 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Heart, Lock, Check } from 'lucide-react';
 
 export default function PaymentGate({ onPurchaseComplete }) {
   const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
+  const configError = !paypalClientId
+    ? 'PayPal is not configured. Add VITE_PAYPAL_CLIENT_ID to your environment.'
+    : '';
 
-  useEffect(() => {
-    if (!paypalClientId) {
-      setError('PayPal is not configured. Add VITE_PAYPAL_CLIENT_ID to your environment.');
-      return;
-    }
-
-    const container = document.getElementById('paypal-button-container');
-    if (!container) {
-      return;
-    }
-
-    const handleLoad = () => {
-      initializePayPalButtons();
-    };
-
-    const handleError = () => {
-      setError('Failed to load PayPal. Check VITE_PAYPAL_CLIENT_ID and refresh the page.');
-    };
-
-    if (window.paypal) {
-      handleLoad();
-      return;
-    }
-
-    let script = document.querySelector('script[data-paypal-sdk="true"]');
-
-    if (!script) {
-      script = document.createElement('script');
-      script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&components=buttons&currency=USD&intent=capture`;
-      script.async = true;
-      script.dataset.paypalSdk = 'true';
-      document.body.appendChild(script);
-    }
-
-    script.addEventListener('load', handleLoad);
-    script.addEventListener('error', handleError);
-
-    return () => {
-      script.removeEventListener('load', handleLoad);
-      script.removeEventListener('error', handleError);
-    };
-  }, [paypalClientId]);
-
-  const initializePayPalButtons = () => {
+  const initializePayPalButtons = useCallback(() => {
     const container = document.getElementById('paypal-button-container');
     if (!container || container.dataset.paypalRendered === 'true' || !window.paypal) {
       return;
@@ -105,7 +65,6 @@ export default function PaymentGate({ onPurchaseComplete }) {
             const order = payload.order;
             console.log('Order captured:', order);
 
-            // Store purchase info in localStorage
             const purchaseData = {
               purchaseDate: new Date().toISOString(),
               orderId: order.id,
@@ -113,8 +72,6 @@ export default function PaymentGate({ onPurchaseComplete }) {
               amount: 19.99,
             };
             localStorage.setItem('omShantiMembership', JSON.stringify(purchaseData));
-
-            // Notify parent that purchase is complete
             onPurchaseComplete(purchaseData);
           } catch (err) {
             console.error('Error capturing order:', err);
@@ -127,7 +84,7 @@ export default function PaymentGate({ onPurchaseComplete }) {
           setError('An error occurred with PayPal. Please try again.');
           setIsProcessing(false);
         },
-        onCancel: (data) => {
+        onCancel: () => {
           console.log('Payment cancelled');
           setError('You cancelled the payment. Try again whenever you\'re ready.');
         },
@@ -138,7 +95,49 @@ export default function PaymentGate({ onPurchaseComplete }) {
         console.error('Error rendering PayPal buttons:', err);
         setError('Failed to load PayPal. Please refresh the page.');
       });
-  };
+  }, [onPurchaseComplete]);
+
+  useEffect(() => {
+    if (!paypalClientId) {
+      return;
+    }
+
+    const container = document.getElementById('paypal-button-container');
+    if (!container) {
+      return;
+    }
+
+    const handleLoad = () => {
+      initializePayPalButtons();
+    };
+
+    const handleError = () => {
+      setError('Failed to load PayPal. Check VITE_PAYPAL_CLIENT_ID and refresh the page.');
+    };
+
+    if (window.paypal) {
+      handleLoad();
+      return;
+    }
+
+    let script = document.querySelector('script[data-paypal-sdk="true"]');
+
+    if (!script) {
+      script = document.createElement('script');
+      script.src = `https://www.paypal.com/sdk/js?client-id=${paypalClientId}&components=buttons&currency=USD&intent=capture`;
+      script.async = true;
+      script.dataset.paypalSdk = 'true';
+      document.body.appendChild(script);
+    }
+
+    script.addEventListener('load', handleLoad);
+    script.addEventListener('error', handleError);
+
+    return () => {
+      script.removeEventListener('load', handleLoad);
+      script.removeEventListener('error', handleError);
+    };
+  }, [paypalClientId, initializePayPalButtons]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950 flex items-center justify-center p-4">
@@ -218,9 +217,9 @@ export default function PaymentGate({ onPurchaseComplete }) {
           </div>
 
           {/* Error Message */}
-          {error && (
+          {(error || configError) && (
             <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
-              <p className="text-red-300 text-sm text-center">{error}</p>
+              <p className="text-red-300 text-sm text-center">{error || configError}</p>
             </div>
           )}
 

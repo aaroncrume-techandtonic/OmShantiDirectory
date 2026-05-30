@@ -108,7 +108,7 @@ export default function MinimalAudioPlayer() {
         unlockedSteps,
       };
     });
-  }, [currentTrack, isPlaying]);
+  }, []);
 
   const activeModuleState = moduleStates.find((state) => !state.completed) || moduleStates[moduleStates.length - 1] || null;
 

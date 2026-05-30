@@ -1,4 +1,4 @@
-import { createContext, useState, useRef, useEffect, useContext } from 'react';
+import { createContext, useState, useRef, useEffect, useContext, useCallback } from 'react';
 
 const AudioContext = createContext(undefined);
 const DEFAULT_TRACK = '/audio/Still_Point_DEFAULT_MusicGPT.mp3';
@@ -92,7 +92,7 @@ export function AudioProvider({ children }) {
     return {};
   };
 
-  const persistTrackPosition = (trackUrl, timeInSeconds) => {
+  const persistTrackPosition = useCallback((trackUrl, timeInSeconds) => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -101,7 +101,7 @@ export function AudioProvider({ children }) {
     const positions = getStoredPositionMap();
     positions[trackUrl] = sanitizedTime;
     window.localStorage.setItem(AUDIO_POSITION_MAP_KEY, JSON.stringify(positions));
-  };
+  }, []);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -134,7 +134,7 @@ export function AudioProvider({ children }) {
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [currentTrack]);
+  }, [currentTrack, persistTrackPosition]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -164,7 +164,7 @@ export function AudioProvider({ children }) {
     return () => {
       audio.removeEventListener('loadedmetadata', restoreTrackPosition);
     };
-  }, [currentTrack]);
+  }, [currentTrack, persistTrackPosition]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -193,7 +193,7 @@ export function AudioProvider({ children }) {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('pause', handlePauseSave);
     };
-  }, [currentTrack]);
+  }, [currentTrack, persistTrackPosition]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -201,15 +201,9 @@ export function AudioProvider({ children }) {
       return;
     }
 
-    if (isMuted) {
-      setIsMuted(false);
-    }
-
-    if (volume <= 0) {
-      setVolume(0.65);
-    }
-
     const tryResume = () => {
+      audio.muted = false;
+      audio.volume = volume > 0 ? volume : 0.65;
       audio.play().then(() => {
         shouldResumeOnLoadRef.current = false;
       }).catch(() => {
@@ -227,7 +221,7 @@ export function AudioProvider({ children }) {
     return () => {
       window.removeEventListener('pointerdown', resumeOnInteraction);
     };
-  }, [isMuted, volume]);
+  }, [volume]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -243,7 +237,7 @@ export function AudioProvider({ children }) {
         console.error('Track swap playback failed:', error);
       });
     }
-  }, [currentTrack]);
+  }, [currentTrack, isPlaying]);
 
   useEffect(() => {
     const audio = audioRef.current;

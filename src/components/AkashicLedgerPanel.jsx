@@ -21,6 +21,7 @@ export default function AkashicLedgerPanel() {
   const [message, setMessage] = useState('');
 
   const entries = useMemo(() => {
+    void ledgerVersion;
     syncAkashicLedgerFromCompletions();
     return getLedgerEntries();
   }, [ledgerVersion]);
@@ -63,14 +64,6 @@ export default function AkashicLedgerPanel() {
     setResonance(3);
     setMessage('Reflection archived in the ledger.');
     setLedgerVersion((version) => version + 1);
-  };
-
-  const moduleTimelineEntries = (moduleNumberToShow) => {
-    const moduleEntry = entries.find(
-      (entry) => entry.entryType === 'COMPLETED' && entry.moduleNumber === moduleNumberToShow
-    );
-    const reflections = getReflectionEntriesForModule(entries, moduleNumberToShow);
-    return [moduleEntry, ...reflections].filter(Boolean);
   };
 
   return (

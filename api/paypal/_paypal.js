@@ -283,7 +283,7 @@ let paymentsPgPool = null;
 let paymentsPgPoolConnectionString = null;
 let postgresSchemaReadyPromise = null;
 
-function usePostgresStorage() {
+function shouldUsePostgresStorage() {
   return Boolean(getDatabaseUrl());
 }
 
@@ -307,7 +307,7 @@ function getPaymentsPgPool() {
 }
 
 async function ensurePostgresSchema() {
-  if (!usePostgresStorage()) {
+  if (!shouldUsePostgresStorage()) {
     return;
   }
 
@@ -456,7 +456,7 @@ function normalizeOrderRecord(order, source) {
 }
 
 export async function savePaymentRecord(order, source = 'capture') {
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const record = normalizeOrderRecord(order, source);
@@ -552,7 +552,7 @@ export async function getPaymentRecord(orderId) {
     return null;
   }
 
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const result = await pool.query(
@@ -609,7 +609,7 @@ export async function claimWebhookEventProcessing(eventId, eventType) {
   const safeTimeoutSeconds = Number.isNaN(timeoutSeconds) || timeoutSeconds < 30 ? 300 : timeoutSeconds;
   const staleClaimCutoff = new Date(Date.now() - safeTimeoutSeconds * 1000).toISOString();
 
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const result = await pool.query(
@@ -681,7 +681,7 @@ export async function markWebhookEventProcessed(eventId, orderId = null) {
     return;
   }
 
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     await pool.query(
@@ -720,7 +720,7 @@ export async function markWebhookEventFailed(eventId, error) {
 
   const message = String(error?.message || error || 'Webhook processing failed').slice(0, 500);
 
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     await pool.query(
@@ -760,7 +760,7 @@ function getWebhookEventRetentionDays() {
 }
 
 export async function cleanupProcessedWebhookEvents(retentionDays = getWebhookEventRetentionDays()) {
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
@@ -778,7 +778,7 @@ export async function cleanupProcessedWebhookEvents(retentionDays = getWebhookEv
 }
 
 export async function getRecentPayments(limit = 20) {
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
@@ -830,7 +830,7 @@ export async function getRecentPayments(limit = 20) {
 }
 
 export async function getRecentWebhookEvents(limit = 20) {
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
@@ -888,7 +888,7 @@ export async function getRecentWebhookEvents(limit = 20) {
 }
 
 export async function getFailedWebhookEvents(limit = 20, offset = 0) {
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 20, 100));
@@ -976,7 +976,7 @@ export async function getFailedWebhookEvents(limit = 20, offset = 0) {
 }
 
 export async function getFailedWebhookSummary(limit = 10) {
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const safeLimit = Math.max(1, Math.min(Number.parseInt(String(limit), 10) || 10, 50));
@@ -1091,7 +1091,7 @@ export async function getFailedWebhookSummary(limit = 10) {
 }
 
 export async function purgeFailedWebhookEvents(olderThanDays = 30, dryRun = true, limit = 500) {
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const parsedDays = Number.parseInt(String(olderThanDays), 10);
@@ -1176,7 +1176,7 @@ export async function getWebhookEventById(eventId) {
     return null;
   }
 
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const result = await pool.query(
@@ -1245,7 +1245,7 @@ export async function requeueFailedWebhookEvent(eventId, reason = 'Manual requeu
 
   const safeReason = String(reason || 'Manual requeue requested').slice(0, 500);
 
-  if (usePostgresStorage()) {
+  if (shouldUsePostgresStorage()) {
     await ensurePostgresSchema();
     const pool = getPaymentsPgPool();
     const result = await pool.query(

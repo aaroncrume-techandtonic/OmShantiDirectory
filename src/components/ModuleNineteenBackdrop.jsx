@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { deterministicUnit } from './backdropDeterministic';
 
 export default function ModuleNineteenBackdrop() {
   const [videoReady, setVideoReady] = useState(true);
@@ -7,11 +8,11 @@ export default function ModuleNineteenBackdrop() {
     () =>
       Array.from({ length: 26 }, (_, index) => ({
         id: index,
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        size: `${Math.random() * 90 + 28}px`,
-        delay: `${Math.random() * 7}s`,
-        duration: `${Math.random() * 9 + 9}s`,
+        left: `${deterministicUnit(index, 1) * 100}%`,
+        top: `${deterministicUnit(index, 2) * 100}%`,
+        size: `${deterministicUnit(index, 3) * 90 + 28}px`,
+        delay: `${deterministicUnit(index, 4) * 7}s`,
+        duration: `${deterministicUnit(index, 5) * 9 + 9}s`,
       })),
     []
   );
@@ -58,3 +59,4 @@ export default function ModuleNineteenBackdrop() {
     </>
   );
 }
+

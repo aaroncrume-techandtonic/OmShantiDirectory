@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { deterministicUnit } from './backdropDeterministic';
 
 export default function ModuleSixBackdrop() {
   const [videoReady, setVideoReady] = useState(true);
@@ -7,11 +8,11 @@ export default function ModuleSixBackdrop() {
     () =>
       Array.from({ length: 36 }, (_, index) => ({
         id: index,
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        size: `${Math.random() * 2 + 1}px`,
-        delay: `${Math.random() * 6}s`,
-        duration: `${Math.random() * 8 + 8}s`,
+        left: `${deterministicUnit(index, 1) * 100}%`,
+        top: `${deterministicUnit(index, 2) * 100}%`,
+        size: `${deterministicUnit(index, 3) * 2 + 1}px`,
+        delay: `${deterministicUnit(index, 4) * 6}s`,
+        duration: `${deterministicUnit(index, 5) * 8 + 8}s`,
       })),
     []
   );
@@ -59,3 +60,4 @@ export default function ModuleSixBackdrop() {
     </>
   );
 }
+
