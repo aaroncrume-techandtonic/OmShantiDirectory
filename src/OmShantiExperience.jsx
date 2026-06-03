@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import DeclarationForm from './components/DeclarationForm.jsx';
 import SanctuaryBlueprintForm from './components/SanctuaryBlueprintForm.jsx';
 import GroundingProtocolForm from './components/GroundingProtocolForm.jsx';
@@ -122,6 +122,29 @@ const buildConceptMap = () => {
 
 const conceptMap = buildConceptMap();
 
+const renderStepElement = (step, moduleNumber, stepProps) => {
+  if (step.startsWith('concept-')) {
+    const conceptNumber = Number(step.replace('concept-', ''));
+    const ConceptComponent = conceptMap.get(conceptNumber);
+    return ConceptComponent ? <ConceptComponent {...stepProps} /> : null;
+  }
+
+  if (step === 'declaration') {
+    return <DeclarationForm {...stepProps} />;
+  }
+
+  if (step === 'blueprint') {
+    return <SanctuaryBlueprintForm {...stepProps} />;
+  }
+
+  if (step === 'protocol') {
+    const ProtocolComponent = PROTOCOL_MAP[moduleNumber];
+    return ProtocolComponent ? <ProtocolComponent {...stepProps} /> : null;
+  }
+
+  return null;
+};
+
 const getInitialState = () => {
   if (typeof window === 'undefined') {
     return { module: 1, step: 'concept-1' };
@@ -196,28 +219,12 @@ export default function OmShantiExperience() {
     };
   }, []);
 
-  const StepComponent = useMemo(() => {
-    if (navState.step.startsWith('concept-')) {
-      const conceptNumber = Number(navState.step.replace('concept-', ''));
-      return conceptMap.get(conceptNumber) || null;
-    }
+  const stepProps = navState.step.startsWith('concept-')
+    ? { onContinue: advanceStep }
+    : { onUnlocked: advanceStep };
+  const stepElement = renderStepElement(navState.step, navState.module, stepProps);
 
-    if (navState.step === 'declaration') {
-      return DeclarationForm;
-    }
-
-    if (navState.step === 'blueprint') {
-      return SanctuaryBlueprintForm;
-    }
-
-    if (navState.step === 'protocol') {
-      return PROTOCOL_MAP[navState.module] || null;
-    }
-
-    return null;
-  }, [navState]);
-
-  if (!StepComponent) {
+  if (!stepElement) {
     return (
       <div className="min-h-screen bg-black text-neutral-200 flex items-center justify-center">
         Missing experience step.
@@ -225,13 +232,9 @@ export default function OmShantiExperience() {
     );
   }
 
-  const stepProps = navState.step.startsWith('concept-')
-    ? { onContinue: advanceStep }
-    : { onUnlocked: advanceStep };
-
   return (
     <div className="relative">
-      <StepComponent {...stepProps} />
+      {stepElement}
       <MinimalAudioPlayer />
       <GlobalAudioPlayer />
     </div>
