@@ -4,7 +4,12 @@ import { useAudio } from '../context/AudioContext';
 export default function GlobalAudioPlayer() {
   const { isPlaying, togglePlay, currentTrack } = useAudio();
 
-  const trackName = currentTrack.split('/').pop()?.replace('.mp3', '').replaceAll('_', ' ') || 'The Still Point';
+  const trackFileName = currentTrack.split('/').pop() || '';
+  const trackBaseName = trackFileName.replace('.mp3', '').replace(/_?DEFAULT_?MusicGPT/gi, '');
+  const trackName =
+    trackBaseName === 'Still_Point'
+      ? 'The Still Point'
+      : trackBaseName.replaceAll('_', ' ').replace(/\s+/g, ' ').trim() || 'The Still Point';
 
   return (
     <div className="fixed bottom-5 right-5 z-[70]">

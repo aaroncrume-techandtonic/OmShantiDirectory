@@ -78,10 +78,11 @@ export default function MinimalAudioPlayer() {
   const displayedVolume = isMuted ? 0 : Math.round(volume * 100);
 
   const trackFileName = currentTrack.split('/').pop() || '';
+  const trackBaseName = trackFileName.replace('.mp3', '').replace(/_?DEFAULT_?MusicGPT/gi, '');
   const trackLabel =
-    trackFileName === 'Still_Point_DEFAULT_MusicGPT.mp3'
+    trackBaseName === 'Still_Point'
       ? 'The Still Point'
-      : trackFileName.replaceAll('_', ' ').replace('.mp3', '') || 'Now Playing';
+      : trackBaseName.replaceAll('_', ' ').replace(/\s+/g, ' ').trim() || 'Now Playing';
 
   const moduleStates = useMemo(() => {
     if (typeof window === 'undefined') {
