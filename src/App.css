@@ -20,13 +20,6 @@ body {
   font-family: 'Manrope', 'Segoe UI', sans-serif;
 }
 
-body.omshanti-focus-mode {
-  overflow: hidden;
-}
-
-body.omshanti-focus-mode .omshanti-media-sidebar {
-  display: none;
-}
 
 .tt-shell {
   position: relative;

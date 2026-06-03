@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
 import { useAudio } from '../context/AudioContext';
-import { useFocusMode } from '../context/FocusModeContext.jsx';
+import { useFullscreen } from '../context/FullscreenContext.jsx';
 import AkashicLedgerPanel from './AkashicLedgerPanel';
 
 const moduleMediaLibrary = [
@@ -65,7 +65,7 @@ export default function MinimalAudioPlayer() {
     toggleMute,
     currentTrack,
   } = useAudio();
-  const { isFocusMode, toggleFocusMode } = useFocusMode();
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
 
   const [expanded, setExpanded] = useState(() => {
     if (typeof window === 'undefined') {
@@ -162,11 +162,11 @@ export default function MinimalAudioPlayer() {
             ≡
           </button>
           <button
-            onClick={toggleFocusMode}
+            onClick={toggleFullscreen}
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200 hover:bg-slate-800"
-            aria-label={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
-            {isFocusMode ? 'Exit' : 'Focus'}
+            {isFullscreen ? 'Exit' : 'Full'}
           </button>
           <button
             onClick={togglePlay}
@@ -182,11 +182,11 @@ export default function MinimalAudioPlayer() {
             <p className="truncate text-xs uppercase tracking-[0.16em] text-slate-400">Media Sidebar</p>
             <div className="flex items-center gap-2">
               <button
-                onClick={toggleFocusMode}
+                onClick={toggleFullscreen}
                 className="rounded-md border border-slate-700 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300 hover:bg-slate-800"
-                aria-label={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               >
-                {isFocusMode ? 'Exit' : 'Focus'}
+                {isFullscreen ? 'Exit' : 'Full'}
               </button>
               <button
                 onClick={() => setExpanded(false)}

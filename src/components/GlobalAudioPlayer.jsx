@@ -1,10 +1,10 @@
 import { Pause, Play } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
-import { useFocusMode } from '../context/FocusModeContext.jsx';
+import { useFullscreen } from '../context/FullscreenContext.jsx';
 
 export default function GlobalAudioPlayer() {
   const { isPlaying, togglePlay, currentTrack } = useAudio();
-  const { isFocusMode, toggleFocusMode } = useFocusMode();
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
 
   const trackFileName = currentTrack.split('/').pop() || '';
   const trackBaseName = trackFileName.replace('.mp3', '').replace(/_?DEFAULT_?MusicGPT/gi, '');
@@ -28,11 +28,11 @@ export default function GlobalAudioPlayer() {
           <p className="max-w-[180px] truncate text-xs text-neutral-200">{trackName}</p>
         </div>
         <button
-          onClick={toggleFocusMode}
+          onClick={toggleFullscreen}
           className="rounded-full border border-neutral-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-200 transition hover:bg-neutral-800"
-          aria-label={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         >
-          {isFocusMode ? 'Exit' : 'Focus'}
+          {isFullscreen ? 'Exit' : 'Full'}
         </button>
       </div>
     </div>
