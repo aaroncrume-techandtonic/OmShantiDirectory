@@ -20,16 +20,15 @@ export default function ModuleNineteenBackdrop() {
   return (
     <>
       {videoReady && (
-        <video
+        <iframe
           className="absolute inset-0 h-full w-full object-cover opacity-28"
-          autoPlay
-          muted
-          loop
-          playsInline
+          src="https://www.youtube.com/embed/3QwKQbWl1iD?autoplay=1&mute=1&loop=1&playlist=3QwKQbWl1iD"
+          title="YouTube video player"
+          frameBorder="0"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
           onError={() => setVideoReady(false)}
-        >
-          <source src="/videos/the-resonant-aura.mp4" type="video/mp4" />
-        </video>
+        />
       )}
 
       <div

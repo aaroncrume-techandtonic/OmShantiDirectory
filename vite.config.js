@@ -38,6 +38,23 @@ const TRACKED_WEBHOOK_EVENTS = new Set([
   'PAYMENT.CAPTURE.REVERSED',
 ])
 
+const COUPONS = {
+  OMSHANTI100: { percent: 100 },
+}
+
+function normalizeCoupon(code) {
+  return (code || '').trim().toUpperCase()
+}
+
+function getCoupon(code) {
+  const normalized = normalizeCoupon(code)
+  if (!normalized) {
+    return null
+  }
+
+  return COUPONS[normalized] ? { code: normalized, ...COUPONS[normalized] } : null
+}
+
 function mapWebhookToOrderShape(body, existingRecord) {
   const resource = body.resource || {}
 
@@ -185,6 +202,41 @@ function paypalDevApiPlugin() {
         if (req.method === 'DELETE') {
           clearMembershipCookie(res)
           return sendJson(res, 200, { active: false })
+        }
+
+        return next()
+      })
+
+      server.middlewares.use('/api/membership/coupon', async (req, res, next) => {
+        const url = req.url ? new URL(req.url, 'http://localhost') : null
+        const queryCode = url?.searchParams.get('code')
+
+        if (req.method === 'GET') {
+          const coupon = getCoupon(queryCode)
+          return sendJson(res, 200, { valid: Boolean(coupon), percent: coupon?.percent || 0 })
+        }
+
+        if (req.method === 'POST') {
+          try {
+            const body = await readRequestBody(req)
+            const coupon = getCoupon(body.code)
+
+            if (!coupon || coupon.percent !== 100) {
+              return sendJson(res, 400, { error: 'Invalid coupon.' })
+            }
+
+            const sessionToken = createMembershipSession({
+              orderId: `coupon-${coupon.code}-${Date.now()}`,
+              payerId: null,
+              payerEmail: null,
+              status: 'COUPON',
+            })
+            res.setHeader('Set-Cookie', `om_shanti_membership=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`)
+            return sendJson(res, 200, { active: true, percent: coupon.percent })
+          } catch (error) {
+            console.error('Coupon redemption error:', error)
+            return sendJson(res, 500, { error: error.message || 'Failed to redeem coupon.' })
+          }
         }
 
         return next()

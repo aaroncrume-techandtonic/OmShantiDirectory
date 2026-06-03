@@ -6,16 +6,15 @@ export default function ModuleThreeBackdrop() {
   return (
     <>
       {videoReady && (
-        <video
+        <iframe
           className="absolute inset-0 h-full w-full object-cover opacity-30"
-          autoPlay
-          muted
-          loop
-          playsInline
+          src="https://www.youtube.com/embed/DzO6Xhucy3o?autoplay=1&mute=1&loop=1&playlist=DzO6Xhucy3o"
+          title="YouTube video player"
+          frameBorder="0"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
           onError={() => setVideoReady(false)}
-        >
-          <source src="/videos/the-earthing-mirror.mp4" type="video/mp4" />
-        </video>
+        />
       )}
       <div
         className="absolute inset-0"

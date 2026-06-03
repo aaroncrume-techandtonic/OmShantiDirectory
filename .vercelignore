@@ -1,0 +1,39 @@
+**/*.mp4
+**/*.mov
+**/*.mkv
+**/*.node
+dist
+dist/**
+public/videos
+public/videos/**
+node_modules/@next/swc-*
+dist
+dist/**
+# Build artifacts and dependencies
+node_modules
+npm-debug.log*
+dist
+.git
+.github
+
+# Local env and tooling files
+.env*
+.vscode
+
+# Workspace sibling projects not needed for this deploy
+akashic-ledger-next
+clerk-nextjs
+db
+indigenous-pages
+migratebea
+my-prisma-postgres-app
+tech-and-tonic-portfolio
+
+# Optional large cinematic media exceeds Vercel per-file upload limits
+public/videos
+public/videos/*.mp4
+*.mp4
+*.mov
+*.mkv
+dist/videos
+dist/videos/*.mp4

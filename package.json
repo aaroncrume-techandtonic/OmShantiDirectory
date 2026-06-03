@@ -10,7 +10,7 @@
     "smoke:webhook": "node scripts/smoke-paypal-webhook.mjs",
     "build": "vite build",
     "test": "node --test test/paypal-api.test.js",
-    "lint": "eslint .",
+    "lint": "eslint src api scripts test vite.config.js eslint.config.js",
     "preview": "vite preview",
     "db:migrate:sqlite-to-postgres": "node scripts/migrate-sqlite-to-postgres.mjs"
   },

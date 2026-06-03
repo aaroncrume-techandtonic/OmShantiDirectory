@@ -20,16 +20,15 @@ export default function ModuleSixBackdrop() {
   return (
     <>
       {videoReady && (
-        <video
+        <iframe
           className="absolute inset-0 h-full w-full object-cover opacity-26"
-          autoPlay
-          muted
-          loop
-          playsInline
+          src="https://www.youtube.com/embed/Wrxpe1R7z8I?autoplay=1&mute=1&loop=1&playlist=Wrxpe1R7z8I"
+          title="YouTube video player"
+          frameBorder="0"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
           onError={() => setVideoReady(false)}
-        >
-          <source src="/videos/the-unplugged-voice.mp4" type="video/mp4" />
-        </video>
+        />
       )}
 
       <div

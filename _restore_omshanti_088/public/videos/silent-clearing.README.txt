@@ -1,0 +1,5 @@
+Optional cinematic background asset path for Module 4 screens:
+
+/videos/silent-clearing.mp4
+
+If this file is absent, Module 4 pages automatically fall back to a violet clearing gradient atmosphere.

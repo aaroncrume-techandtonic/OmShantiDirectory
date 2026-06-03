@@ -20,16 +20,15 @@ export default function ModuleTwentyFourBackdrop() {
   return (
     <>
       {videoReady && (
-        <video
+        <iframe
           className="absolute inset-0 h-full w-full object-cover opacity-28"
-          autoPlay
-          muted
-          loop
-          playsInline
+          src="https://www.youtube.com/embed/9QwKQbWl1iJ?autoplay=1&mute=1&loop=1&playlist=9QwKQbWl1iJ"
+          title="YouTube video player"
+          frameBorder="0"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
           onError={() => setVideoReady(false)}
-        >
-          <source src="/videos/the-crystal-stream.mp4" type="video/mp4" />
-        </video>
+        />
       )}
 
       <div

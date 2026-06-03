@@ -6,16 +6,15 @@ export default function ModuleFourBackdrop() {
   return (
     <>
       {videoReady && (
-        <video
+        <iframe
           className="absolute inset-0 h-full w-full object-cover opacity-30"
-          autoPlay
-          muted
-          loop
-          playsInline
+          src="https://www.youtube.com/embed/ukZqtwbINqM?autoplay=1&mute=1&loop=1&playlist=ukZqtwbINqM"
+          title="YouTube video player"
+          frameBorder="0"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
           onError={() => setVideoReady(false)}
-        >
-          <source src="/videos/the-silent-clearing.mp4" type="video/mp4" />
-        </video>
+        />
       )}
       <div
         className="absolute inset-0"
