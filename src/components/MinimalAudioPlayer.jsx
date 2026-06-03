@@ -156,10 +156,10 @@ export default function MinimalAudioPlayer() {
         <div className="flex flex-col items-center gap-2 p-2">
           <button
             onClick={() => setExpanded(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200 hover:bg-slate-800"
             aria-label="Expand media sidebar"
           >
-            ≡
+            Menu
           </button>
           <button
             onClick={toggleFullscreen}
@@ -170,10 +170,10 @@ export default function MinimalAudioPlayer() {
           </button>
           <button
             onClick={togglePlay}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200 hover:bg-slate-800"
             aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
           >
-            {isPlaying ? 'II' : '>'}
+            {isPlaying ? 'Pause' : 'Play'}
           </button>
         </div>
       ) : (
