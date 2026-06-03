@@ -26,6 +26,7 @@ import CrystalStreamProtocolForm from './components/CrystalStreamProtocolForm.js
 import CosmicHumilityProtocolForm from './components/CosmicHumilityProtocolForm.jsx';
 import MinimalAudioPlayer from './components/MinimalAudioPlayer.jsx';
 import GlobalAudioPlayer from './components/GlobalAudioPlayer.jsx';
+import { FocusModeProvider } from './context/FocusModeContext.jsx';
 import { getModuleStepOrder } from './lib/akashicLedger.js';
 
 const CONCEPT_MODULES = import.meta.glob('./Concept*.jsx', { eager: true });
@@ -233,10 +234,12 @@ export default function OmShantiExperience() {
   }
 
   return (
-    <div className="relative">
-      {stepElement}
-      <MinimalAudioPlayer />
-      <GlobalAudioPlayer />
-    </div>
+    <FocusModeProvider>
+      <div className="relative">
+        {stepElement}
+        <MinimalAudioPlayer />
+        <GlobalAudioPlayer />
+      </div>
+    </FocusModeProvider>
   );
 }

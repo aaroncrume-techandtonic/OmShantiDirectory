@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
 import { useAudio } from '../context/AudioContext';
+import { useFocusMode } from '../context/FocusModeContext.jsx';
 import AkashicLedgerPanel from './AkashicLedgerPanel';
 
 const moduleMediaLibrary = [
@@ -64,6 +65,7 @@ export default function MinimalAudioPlayer() {
     toggleMute,
     currentTrack,
   } = useAudio();
+  const { isFocusMode, toggleFocusMode } = useFocusMode();
 
   const [expanded, setExpanded] = useState(() => {
     if (typeof window === 'undefined') {
@@ -146,7 +148,7 @@ export default function MinimalAudioPlayer() {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
-      className={`fixed left-2 top-1/2 z-50 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-800 bg-black/70 backdrop-blur-md transition-all duration-300 ${
+      className={`omshanti-media-sidebar fixed left-2 top-1/2 z-50 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-800 bg-black/70 backdrop-blur-md transition-all duration-300 ${
         expanded ? 'h-[88vh] w-[min(90vw,340px)]' : 'h-auto w-14'
       }`}
     >
@@ -160,6 +162,13 @@ export default function MinimalAudioPlayer() {
             ≡
           </button>
           <button
+            onClick={toggleFocusMode}
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200 hover:bg-slate-800"
+            aria-label={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+          >
+            {isFocusMode ? 'Exit' : 'Focus'}
+          </button>
+          <button
             onClick={togglePlay}
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
             aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
@@ -171,13 +180,22 @@ export default function MinimalAudioPlayer() {
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
             <p className="truncate text-xs uppercase tracking-[0.16em] text-slate-400">Media Sidebar</p>
-            <button
-              onClick={() => setExpanded(false)}
-              className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
-              aria-label="Collapse media sidebar"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleFocusMode}
+                className="rounded-md border border-slate-700 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300 hover:bg-slate-800"
+                aria-label={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+              >
+                {isFocusMode ? 'Exit' : 'Focus'}
+              </button>
+              <button
+                onClick={() => setExpanded(false)}
+                className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                aria-label="Collapse media sidebar"
+              >
+                Close
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-3">

@@ -1,8 +1,10 @@
 import { Pause, Play } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
+import { useFocusMode } from '../context/FocusModeContext.jsx';
 
 export default function GlobalAudioPlayer() {
   const { isPlaying, togglePlay, currentTrack } = useAudio();
+  const { isFocusMode, toggleFocusMode } = useFocusMode();
 
   const trackFileName = currentTrack.split('/').pop() || '';
   const trackBaseName = trackFileName.replace('.mp3', '').replace(/_?DEFAULT_?MusicGPT/gi, '');
@@ -12,7 +14,7 @@ export default function GlobalAudioPlayer() {
       : trackBaseName.replaceAll('_', ' ').replace(/\s+/g, ' ').trim() || 'The Still Point';
 
   return (
-    <div className="fixed bottom-5 right-5 z-[70]">
+    <div className="omshanti-global-player fixed bottom-5 right-5 z-[70]">
       <div className="flex items-center gap-3 rounded-full border border-neutral-700/80 bg-black/85 px-4 py-2.5 shadow-[0_6px_24px_rgba(0,0,0,0.45)] backdrop-blur-md">
         <button
           onClick={togglePlay}
@@ -25,6 +27,13 @@ export default function GlobalAudioPlayer() {
           <p className="text-[10px] uppercase tracking-[0.22em] text-neutral-500">Now Playing</p>
           <p className="max-w-[180px] truncate text-xs text-neutral-200">{trackName}</p>
         </div>
+        <button
+          onClick={toggleFocusMode}
+          className="rounded-full border border-neutral-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-200 transition hover:bg-neutral-800"
+          aria-label={isFocusMode ? 'Exit focus mode' : 'Enter focus mode'}
+        >
+          {isFocusMode ? 'Exit' : 'Focus'}
+        </button>
       </div>
     </div>
   );
