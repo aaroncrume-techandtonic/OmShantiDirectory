@@ -31,3 +31,6 @@ tech-and-tonic-portfolio
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+.env*
