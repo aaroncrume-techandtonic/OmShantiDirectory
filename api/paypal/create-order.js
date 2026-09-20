@@ -1,4 +1,5 @@
-import { createPaypalOrder, savePaymentRecord, sendJson } from './_paypal.js';
+import { createPaypalOrder, readJsonBody, savePaymentRecord, sendJson } from './_paypal.js';
+import { getCoupon, getDiscountedPrice, getSpecialOffer } from '../membership/_coupons.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -6,7 +7,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const order = await createPaypalOrder();
+    const body = await readJsonBody(req).catch(() => ({}));
+    const specialOffer = getSpecialOffer(body?.offerId);
+    const coupon = specialOffer ? null : getCoupon(body?.couponCode);
+    const amount = specialOffer ? specialOffer.price : coupon ? getDiscountedPrice(coupon.percent) : undefined;
+    const order = await createPaypalOrder(amount);
     await savePaymentRecord(order, 'create');
     const approveLink = order.links?.find((link) => link.rel === 'approve')?.href || null;
     const defaultApproveHost = process.env.PAYPAL_ENV === 'production'

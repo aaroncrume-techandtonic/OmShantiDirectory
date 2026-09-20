@@ -167,7 +167,11 @@ const getInitialState = () => {
   return { module: fallbackModule, step: fallbackStep };
 };
 
-export default function OmShantiExperience() {
+export default function OmShantiExperience({
+  isMember = true,
+  previewLimit = 25,
+  onPreviewLimitReached,
+} = {}) {
   const [navState, setNavState] = useState(getInitialState);
 
   const persistStep = (moduleNumber, step) => {
@@ -204,6 +208,12 @@ export default function OmShantiExperience() {
   }, []);
 
   useEffect(() => {
+    if (!isMember && navState.module > previewLimit) {
+      onPreviewLimitReached?.();
+    }
+  }, [isMember, previewLimit, navState.module, onPreviewLimitReached]);
+
+  useEffect(() => {
     const handleNavigate = (event) => {
       const { module, step } = event.detail || {};
       if (!module || !step) {
@@ -220,10 +230,41 @@ export default function OmShantiExperience() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+
+      const activeMain = document.querySelector('.omshanti-step-shell > main');
+      if (activeMain && typeof activeMain.scrollTo === 'function') {
+        activeMain.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [navState.module, navState.step]);
+
+  const previewLimitHit = !isMember && navState.module > previewLimit;
+
   const stepProps = navState.step.startsWith('concept-')
     ? { onContinue: advanceStep }
     : { onUnlocked: advanceStep };
-  const stepElement = renderStepElement(navState.step, navState.module, stepProps);
+  const stepElement = previewLimitHit ? null : renderStepElement(navState.step, navState.module, stepProps);
+
+  if (previewLimitHit) {
+    return (
+      <div className="min-h-screen bg-black text-neutral-200 flex items-center justify-center">
+        Unlocking your next chapter...
+      </div>
+    );
+  }
 
   if (!stepElement) {
     return (
@@ -235,7 +276,7 @@ export default function OmShantiExperience() {
 
   return (
     <FullscreenProvider>
-      <div className="relative">
+      <div className="relative omshanti-step-shell">
         {stepElement}
         <MinimalAudioPlayer />
         <GlobalAudioPlayer />

@@ -16,6 +16,9 @@ export default function PaymentGate({ onPurchaseComplete }) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showDeclineOffer, setShowDeclineOffer] = useState(false);
+  const [isOfferProcessing, setIsOfferProcessing] = useState(false);
+  const [offerError, setOfferError] = useState('');
   const configError = !paypalClientId
     ? 'PayPal is not configured. Add VITE_PAYPAL_CLIENT_ID to your environment.'
     : '';
@@ -114,6 +117,94 @@ export default function PaymentGate({ onPurchaseComplete }) {
         setError('Failed to load PayPal. Please refresh the page.');
       });
   }, [basePrice, couponPercent, onPurchaseComplete]);
+
+  const initializePayPalOfferButtons = useCallback(() => {
+    const container = document.getElementById('paypal-offer-button-container');
+    if (!container || container.dataset.paypalRendered === 'true' || !window.paypal) {
+      return;
+    }
+
+    container.dataset.paypalRendered = 'true';
+
+    window.paypal
+      .Buttons({
+        style: {
+          layout: 'vertical',
+          color: 'blue',
+          shape: 'pill',
+          label: 'paypal',
+        },
+        createOrder: async () => {
+          setOfferError('');
+
+          const response = await fetch('/api/paypal/create-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ offerId: 'new-aura' }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.id) {
+            throw new Error(data.error || 'Failed to create PayPal order.');
+          }
+
+          return data.id;
+        },
+        onApprove: async (data) => {
+          setIsOfferProcessing(true);
+          setOfferError('');
+
+          try {
+            const response = await fetch('/api/paypal/capture-order', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ orderId: data.orderID }),
+            });
+
+            const payload = await response.json();
+
+            if (!response.ok || !payload.order) {
+              throw new Error(payload.error || 'Failed to verify PayPal payment.');
+            }
+
+            const order = payload.order;
+
+            const purchaseData = {
+              purchaseDate: new Date().toISOString(),
+              orderId: order.id,
+              status: 'completed',
+              amount: 4.99,
+              offer: 'new-aura',
+            };
+            localStorage.setItem('omShantiMembership', JSON.stringify(purchaseData));
+            onPurchaseComplete(purchaseData);
+          } catch (err) {
+            console.error('Error capturing offer order:', err);
+            setOfferError(err.message || 'Payment processing failed. Please try again.');
+            setIsOfferProcessing(false);
+          }
+        },
+        onError: (err) => {
+          console.error('PayPal offer error:', err);
+          setOfferError('An error occurred with PayPal. Please try again.');
+          setIsOfferProcessing(false);
+        },
+        onCancel: () => {
+          setOfferError('You cancelled the payment. Try again whenever you\'re ready.');
+        },
+      })
+      .render('#paypal-offer-button-container')
+      .catch((err) => {
+        container.dataset.paypalRendered = 'false';
+        console.error('Error rendering PayPal offer buttons:', err);
+        setOfferError('Failed to load PayPal. Please refresh the page.');
+      });
+  }, [onPurchaseComplete]);
 
   const handleApplyCoupon = async () => {
     setCouponError('');
@@ -268,6 +359,36 @@ export default function PaymentGate({ onPurchaseComplete }) {
     };
   }, [paypalClientId, initializePayPalButtons, couponPercent]);
 
+  useEffect(() => {
+    if (!paypalClientId || !showDeclineOffer) {
+      return;
+    }
+
+    const container = document.getElementById('paypal-offer-button-container');
+    if (!container) {
+      return;
+    }
+
+    container.dataset.paypalRendered = 'false';
+
+    if (window.paypal) {
+      initializePayPalOfferButtons();
+      return;
+    }
+
+    const script = document.querySelector('script[data-paypal-sdk="true"]');
+    if (!script) {
+      return;
+    }
+
+    const handleLoad = () => initializePayPalOfferButtons();
+    script.addEventListener('load', handleLoad);
+
+    return () => {
+      script.removeEventListener('load', handleLoad);
+    };
+  }, [paypalClientId, showDeclineOffer, initializePayPalOfferButtons]);
+
   if (redeemedInfo) {
     return (
       <div id="join" className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950 flex items-center justify-center p-4">
@@ -407,7 +528,7 @@ export default function PaymentGate({ onPurchaseComplete }) {
                 Unlock Full Access
               </h2>
               <p className="text-slate-400 text-center mb-8 text-sm leading-relaxed">
-                Gain lifetime access to all 100 knowledge infusions bridging ancient mystical paradigms with modern neuroscience.
+                You've completed your free preview. Continue with lifetime access to all 100 knowledge infusions bridging ancient mystical paradigms with modern neuroscience.
               </p>
 
               <div className="space-y-4 mb-8 bg-slate-800/50 rounded-lg p-6 border border-slate-700/50">
@@ -499,6 +620,39 @@ export default function PaymentGate({ onPurchaseComplete }) {
               {(error || configError || couponError) && (
                 <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
                   <p className="text-red-300 text-sm text-center">{error || configError || couponError}</p>
+                </div>
+              )}
+
+              {couponPercent < 100 && !showDeclineOffer && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeclineOffer(true)}
+                  className="w-full text-center text-xs uppercase tracking-widest text-slate-500 hover:text-slate-300 mb-6"
+                >
+                  Not ready? See a smaller offer
+                </button>
+              )}
+
+              {couponPercent < 100 && showDeclineOffer && (
+                <div className="mb-6 rounded-lg border border-purple-400/30 bg-purple-500/10 p-5 text-center">
+                  <p className="text-xs uppercase tracking-[0.2em] text-purple-300">Cosmic Offer</p>
+                  <h3 className="text-xl font-bold text-slate-100 mt-1 mb-1">New Aura</h3>
+                  <p className="text-slate-300 text-sm mb-4 leading-relaxed">
+                    A lighter first step across the threshold &mdash; the same lifetime access, for a one-time $4.99.
+                  </p>
+                  <div className="text-3xl font-bold text-slate-100 mb-4">$4.99</div>
+                  <div id="paypal-offer-button-container" className="mb-3"></div>
+                  {offerError && <p className="text-red-300 text-xs mb-2">{offerError}</p>}
+                  {isOfferProcessing && (
+                    <p className="text-purple-200 text-xs mb-2">Processing your payment...</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowDeclineOffer(false)}
+                    className="text-xs uppercase tracking-widest text-slate-500 hover:text-slate-300"
+                  >
+                    No thanks, back to full offer
+                  </button>
                 </div>
               )}
 

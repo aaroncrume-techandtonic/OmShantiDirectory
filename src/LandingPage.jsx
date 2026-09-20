@@ -50,11 +50,7 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: 'easeOut' } },
 };
 
-const scrollToJoin = () => {
-  document.getElementById('join')?.scrollIntoView({ behavior: 'smooth' });
-};
-
-export default function LandingPage() {
+export default function LandingPage({ onBegin }) {
   return (
     <div className="relative overflow-hidden bg-[#050408] text-slate-100">
       {/* Ambient candlelight / drum-pulse glow */}
@@ -71,7 +67,7 @@ export default function LandingPage() {
         </span>
         <button
           type="button"
-          onClick={scrollToJoin}
+          onClick={onBegin}
           className="rounded-full border border-amber-400/30 px-4 py-2 text-xs uppercase tracking-widest text-amber-100/90 transition-colors hover:bg-amber-400/10"
         >
           Enter
@@ -117,7 +113,7 @@ export default function LandingPage() {
         >
           <button
             type="button"
-            onClick={scrollToJoin}
+            onClick={onBegin}
             className="rounded-full bg-amber-400/90 px-8 py-4 text-sm font-semibold uppercase tracking-widest text-slate-950 shadow-[0_0_40px_-10px_rgba(251,191,36,0.7)] transition-transform hover:scale-[1.03]"
           >
             Begin Your Self-Led Journey
@@ -270,10 +266,10 @@ export default function LandingPage() {
           <h2 className="font-serif text-3xl text-slate-50 sm:text-4xl">
             Step across the threshold.
           </h2>
-          <p className="mt-4 text-slate-400">Free, self-led, and always available.</p>
+          <p className="mt-4 text-slate-400">Free to begin — the first two modules are on us.</p>
           <button
             type="button"
-            onClick={scrollToJoin}
+            onClick={onBegin}
             className="mt-8 rounded-full bg-amber-400/90 px-10 py-4 text-sm font-semibold uppercase tracking-widest text-slate-950 shadow-[0_0_40px_-10px_rgba(251,191,36,0.7)] transition-transform hover:scale-[1.03]"
           >
             Begin Your Self-Led Journey

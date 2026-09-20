@@ -3,12 +3,16 @@ import OmShantiExperience from './OmShantiExperience.jsx';
 import PaymentGate from './PaymentGate.jsx';
 import LandingPage from './LandingPage.jsx';
 
+const FREE_PREVIEW_MODULE_LIMIT = 2;
+
 export default function App() {
   const [membershipState, setMembershipState] = useState({
     status: 'checking',
     active: false,
     error: '',
   });
+  const [previewStarted, setPreviewStarted] = useState(false);
+  const [previewLimitReached, setPreviewLimitReached] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,6 +53,7 @@ export default function App() {
 
   const handlePurchaseComplete = () => {
     setMembershipState({ status: 'ready', active: true, error: '' });
+    setPreviewLimitReached(false);
   };
 
   if (membershipState.status === 'checking') {
@@ -59,14 +64,23 @@ export default function App() {
     );
   }
 
-  if (!membershipState.active) {
-    return (
-      <>
-        <LandingPage />
-        <PaymentGate onPurchaseComplete={handlePurchaseComplete} />
-      </>
-    );
+  if (membershipState.active) {
+    return <OmShantiExperience />;
   }
 
-  return <OmShantiExperience />;
+  if (!previewStarted) {
+    return <LandingPage onBegin={() => setPreviewStarted(true)} />;
+  }
+
+  if (previewLimitReached) {
+    return <PaymentGate onPurchaseComplete={handlePurchaseComplete} />;
+  }
+
+  return (
+    <OmShantiExperience
+      isMember={false}
+      previewLimit={FREE_PREVIEW_MODULE_LIMIT}
+      onPreviewLimitReached={() => setPreviewLimitReached(true)}
+    />
+  );
 }
