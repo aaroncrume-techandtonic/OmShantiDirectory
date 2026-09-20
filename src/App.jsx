@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import OmShantiExperience from './OmShantiExperience.jsx';
 import PaymentGate from './PaymentGate.jsx';
 import LandingPage from './LandingPage.jsx';
+import ShareBar from './components/ShareBar.jsx';
 
 const FREE_PREVIEW_MODULE_LIMIT = 2;
 
@@ -58,29 +59,50 @@ export default function App() {
 
   if (membershipState.status === 'checking') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
-        Checking membership...
-      </div>
+      <>
+        <ShareBar />
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+          Checking membership...
+        </div>
+      </>
     );
   }
 
   if (membershipState.active) {
-    return <OmShantiExperience />;
+    return (
+      <>
+        <ShareBar />
+        <OmShantiExperience />
+      </>
+    );
   }
 
   if (!previewStarted) {
-    return <LandingPage onBegin={() => setPreviewStarted(true)} />;
+    return (
+      <>
+        <ShareBar />
+        <LandingPage onBegin={() => setPreviewStarted(true)} />
+      </>
+    );
   }
 
   if (previewLimitReached) {
-    return <PaymentGate onPurchaseComplete={handlePurchaseComplete} />;
+    return (
+      <>
+        <ShareBar />
+        <PaymentGate onPurchaseComplete={handlePurchaseComplete} />
+      </>
+    );
   }
 
   return (
-    <OmShantiExperience
-      isMember={false}
-      previewLimit={FREE_PREVIEW_MODULE_LIMIT}
-      onPreviewLimitReached={() => setPreviewLimitReached(true)}
-    />
+    <>
+      <ShareBar />
+      <OmShantiExperience
+        isMember={false}
+        previewLimit={FREE_PREVIEW_MODULE_LIMIT}
+        onPreviewLimitReached={() => setPreviewLimitReached(true)}
+      />
+    </>
   );
 }
