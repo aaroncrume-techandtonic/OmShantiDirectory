@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import OmShantiExperience from './OmShantiExperience.jsx';
 import PaymentGate from './PaymentGate.jsx';
+import LandingPage from './LandingPage.jsx';
 
 export default function App() {
   const [membershipState, setMembershipState] = useState({
@@ -59,7 +60,12 @@ export default function App() {
   }
 
   if (!membershipState.active) {
-    return <PaymentGate onPurchaseComplete={handlePurchaseComplete} />;
+    return (
+      <>
+        <LandingPage />
+        <PaymentGate onPurchaseComplete={handlePurchaseComplete} />
+      </>
+    );
   }
 
   return <OmShantiExperience />;

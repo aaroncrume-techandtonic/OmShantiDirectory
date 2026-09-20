@@ -7,8 +7,15 @@ export default function PaymentGate({ onPurchaseComplete }) {
   const [error, setError] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [couponPercent, setCouponPercent] = useState(0);
+  const [couponEmail, setCouponEmail] = useState('');
   const [couponError, setCouponError] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [redeemedInfo, setRedeemedInfo] = useState(null);
+  const [mode, setMode] = useState('purchase');
+  const [loginOrderId, setLoginOrderId] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const configError = !paypalClientId
     ? 'PayPal is not configured. Add VITE_PAYPAL_CLIENT_ID to your environment.'
     : '';
@@ -43,6 +50,7 @@ export default function PaymentGate({ onPurchaseComplete }) {
             headers: {
               'Content-Type': 'application/json',
             },
+            body: JSON.stringify({ couponCode: couponCode.trim() }),
           });
 
           const data = await response.json();
@@ -79,7 +87,7 @@ export default function PaymentGate({ onPurchaseComplete }) {
               purchaseDate: new Date().toISOString(),
               orderId: order.id,
               status: 'completed',
-              amount: basePrice,
+              amount: adjustedPrice,
             };
             localStorage.setItem('omShantiMembership', JSON.stringify(purchaseData));
             onPurchaseComplete(purchaseData);
@@ -135,13 +143,20 @@ export default function PaymentGate({ onPurchaseComplete }) {
   const handleRedeemCoupon = async () => {
     setCouponError('');
     setError('');
+
+    const trimmedEmail = couponEmail.trim();
+    if (!trimmedEmail) {
+      setCouponError('Enter your email so you can restore access on another device later.');
+      return;
+    }
+
     setIsRedeeming(true);
 
     try {
       const response = await fetch('/api/membership/coupon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: couponCode.trim() }),
+        body: JSON.stringify({ code: couponCode.trim(), email: trimmedEmail }),
       });
       const payload = await response.json();
 
@@ -151,16 +166,57 @@ export default function PaymentGate({ onPurchaseComplete }) {
 
       const purchaseData = {
         purchaseDate: new Date().toISOString(),
-        orderId: `coupon-${couponCode.trim().toUpperCase()}`,
+        orderId: payload.orderId,
         status: 'completed',
         amount: 0,
         coupon: couponCode.trim().toUpperCase(),
       };
       localStorage.setItem('omShantiMembership', JSON.stringify(purchaseData));
-      onPurchaseComplete(purchaseData);
+      setRedeemedInfo({ orderId: payload.orderId, email: trimmedEmail, purchaseData });
     } catch (err) {
       setCouponError(err.message || 'Failed to redeem coupon.');
+    } finally {
       setIsRedeeming(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    setLoginError('');
+    setError('');
+
+    const trimmedOrderId = loginOrderId.trim();
+    const trimmedEmail = loginEmail.trim();
+
+    if (!trimmedOrderId || !trimmedEmail) {
+      setLoginError('Enter both your order ID and the email used at checkout.');
+      return;
+    }
+
+    setIsLoggingIn(true);
+
+    try {
+      const response = await fetch('/api/membership/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: trimmedOrderId, email: trimmedEmail }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.active) {
+        throw new Error(payload.error || 'No matching membership found.');
+      }
+
+      const purchaseData = {
+        purchaseDate: new Date().toISOString(),
+        orderId: trimmedOrderId,
+        status: 'completed',
+      };
+      localStorage.setItem('omShantiMembership', JSON.stringify(purchaseData));
+      onPurchaseComplete(purchaseData);
+    } catch (err) {
+      setLoginError(err.message || 'No matching membership found.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -212,8 +268,45 @@ export default function PaymentGate({ onPurchaseComplete }) {
     };
   }, [paypalClientId, initializePayPalButtons, couponPercent]);
 
+  if (redeemedInfo) {
+    return (
+      <div id="join" className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950 to-slate-950"></div>
+
+        <div className="relative z-10 max-w-md w-full bg-slate-900/60 backdrop-blur-xl border border-emerald-500/30 rounded-2xl overflow-hidden shadow-2xl p-8 text-center">
+          <div className="flex justify-center mb-6">
+            <div className="p-4 bg-emerald-500/10 rounded-full">
+              <Check size={40} className="text-emerald-400" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-100 mb-3">Membership Unlocked!</h2>
+          <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+            Save this information &mdash; you&apos;ll need it to restore access if you switch devices or clear your browser.
+          </p>
+          <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-4 mb-6 text-left space-y-3">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-slate-500">Order ID</p>
+              <p className="font-mono text-sm text-slate-100 break-all">{redeemedInfo.orderId}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-widest text-slate-500">Email</p>
+              <p className="font-mono text-sm text-slate-100 break-all">{redeemedInfo.email}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onPurchaseComplete(redeemedInfo.purchaseData)}
+            className="w-full rounded-md border border-emerald-400/40 bg-emerald-500/20 px-4 py-3 text-xs uppercase tracking-widest text-emerald-100 hover:bg-emerald-500/30"
+          >
+            Continue to Om Shanti
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950 flex items-center justify-center p-4">
+    <div id="join" className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950 flex items-center justify-center p-4">
       <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950 to-slate-950"></div>
 
       <div className="relative z-10 max-w-md w-full bg-slate-900/60 backdrop-blur-xl border border-indigo-500/30 rounded-2xl overflow-hidden shadow-2xl">
@@ -231,114 +324,198 @@ export default function PaymentGate({ onPurchaseComplete }) {
         </div>
 
         <div className="px-8 py-10">
+          <div className="grid grid-cols-2 gap-2 mb-8 rounded-lg bg-slate-800/50 border border-slate-700/50 p-1">
+            <button
+              type="button"
+              onClick={() => setMode('purchase')}
+              className={`rounded-md px-4 py-3 text-xs uppercase tracking-widest transition-colors ${
+                mode === 'purchase' ? 'bg-indigo-500/30 text-indigo-100' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              New Member
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className={`rounded-md px-4 py-3 text-xs uppercase tracking-widest transition-colors ${
+                mode === 'login' ? 'bg-indigo-500/30 text-indigo-100' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Returning Member
+            </button>
+          </div>
+
           <div className="flex justify-center mb-8">
             <div className="p-4 bg-indigo-500/10 rounded-full">
               <Lock size={40} className="text-indigo-400" />
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-slate-100 text-center mb-3">
-            Unlock Full Access
-          </h2>
-          <p className="text-slate-400 text-center mb-8 text-sm leading-relaxed">
-            Gain lifetime access to all 28 knowledge infusions bridging ancient mystical paradigms with modern neuroscience.
-          </p>
-
-          <div className="space-y-4 mb-8 bg-slate-800/50 rounded-lg p-6 border border-slate-700/50">
-            <div className="flex items-start gap-3">
-              <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-              <span className="text-slate-300 text-sm">
-                <strong>28 Knowledge Infusions</strong> - complete directory
-              </span>
-            </div>
-            <div className="flex items-start gap-3">
-              <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-              <span className="text-slate-300 text-sm">
-                <strong>Lifetime Access</strong> - one-time payment
-              </span>
-            </div>
-            <div className="flex items-start gap-3">
-              <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-              <span className="text-slate-300 text-sm">
-                <strong>Full Search & Filtering</strong> - explore by category
-              </span>
-            </div>
-            <div className="flex items-start gap-3">
-              <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
-              <span className="text-slate-300 text-sm">
-                <strong>Deep Learning Modals</strong> - scripts, practices, origins
-              </span>
-            </div>
-          </div>
-
-          <div className="text-center mb-6">
-            <div className="text-4xl font-bold text-slate-100 mb-2">
-              ${adjustedPrice.toFixed(2)}
-            </div>
-            {couponPercent > 0 && (
-              <p className="text-emerald-300 text-xs uppercase tracking-[0.2em]">
-                Coupon applied: {couponPercent}% off
+          {mode === 'login' ? (
+            <>
+              <h2 className="text-2xl font-bold text-slate-100 text-center mb-3">
+                Welcome Back
+              </h2>
+              <p className="text-slate-400 text-center mb-8 text-sm leading-relaxed">
+                Restore access to your existing membership using your order ID and the email used at checkout.
               </p>
-            )}
-            <p className="text-slate-400 text-sm">One-time lifetime membership</p>
-          </div>
 
-          <div className="mb-6">
-            <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">
-              Access Code
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={couponCode}
-                onChange={(event) => setCouponCode(event.target.value)}
-                placeholder="Enter free or discount code"
-                className="flex-1 rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleApplyCoupon}
-                className="rounded-md border border-indigo-500/40 bg-indigo-500/20 px-4 text-xs uppercase tracking-widest text-indigo-100 hover:bg-indigo-500/30"
-              >
-                Apply
-              </button>
-            </div>
-            {couponPercent >= 100 && (
-              <button
-                type="button"
-                onClick={handleRedeemCoupon}
-                disabled={isRedeeming}
-                className="mt-3 w-full rounded-md border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs uppercase tracking-widest text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-60"
-              >
-                {isRedeeming ? 'Unlocking...' : 'Unlock with coupon'}
-              </button>
-            )}
-          </div>
-
-          {couponPercent < 100 && (
-            <div className="mb-6">
-              <div id="paypal-button-container" className="[&>div]:first-child:rounded-lg"></div>
-            </div>
-          )}
-
-          {(error || configError || couponError) && (
-            <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
-              <p className="text-red-300 text-sm text-center">{error || configError || couponError}</p>
-            </div>
-          )}
-
-          {isProcessing && (
-            <div className="text-center text-indigo-300 text-sm">
-              <div className="inline-flex items-center gap-2">
-                <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
-                Processing your payment...
+              <div className="space-y-4 mb-6 text-left">
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">
+                    Order ID
+                  </label>
+                  <input
+                    type="text"
+                    value={loginOrderId}
+                    onChange={(event) => setLoginOrderId(event.target.value)}
+                    placeholder="From your PayPal receipt or coupon confirmation"
+                    className="w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">
+                    Email Used At Checkout
+                  </label>
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={(event) => setLoginEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  disabled={isLoggingIn}
+                  className="w-full rounded-md border border-indigo-500/40 bg-indigo-500/20 px-4 py-3 text-xs uppercase tracking-widest text-indigo-100 hover:bg-indigo-500/30 disabled:opacity-60"
+                >
+                  {isLoggingIn ? 'Checking...' : 'Restore Access'}
+                </button>
               </div>
-            </div>
-          )}
 
-          <p className="text-slate-500 text-xs text-center mt-8">
-            Secure payment powered by PayPal. Your information is encrypted and protected.
-          </p>
+              {(loginError || error) && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
+                  <p className="text-red-300 text-sm text-center">{loginError || error}</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-bold text-slate-100 text-center mb-3">
+                Unlock Full Access
+              </h2>
+              <p className="text-slate-400 text-center mb-8 text-sm leading-relaxed">
+                Gain lifetime access to all 100 knowledge infusions bridging ancient mystical paradigms with modern neuroscience.
+              </p>
+
+              <div className="space-y-4 mb-8 bg-slate-800/50 rounded-lg p-6 border border-slate-700/50">
+                <div className="flex items-start gap-3">
+                  <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                  <span className="text-slate-300 text-sm">
+                    <strong>100 Knowledge Infusions</strong> - complete directory
+                  </span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                  <span className="text-slate-300 text-sm">
+                    <strong>Lifetime Access</strong> - one-time payment
+                  </span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                  <span className="text-slate-300 text-sm">
+                    <strong>Full Search & Filtering</strong> - explore by category
+                  </span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Check size={20} className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                  <span className="text-slate-300 text-sm">
+                    <strong>Deep Learning Modals</strong> - scripts, practices, origins
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-center mb-6">
+                <div className="text-4xl font-bold text-slate-100 mb-2">
+                  ${adjustedPrice.toFixed(2)}
+                </div>
+                {couponPercent > 0 && (
+                  <p className="text-emerald-300 text-xs uppercase tracking-[0.2em]">
+                    Coupon applied: {couponPercent}% off
+                  </p>
+                )}
+                <p className="text-slate-400 text-sm">One-time lifetime membership</p>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-xs uppercase tracking-widest text-slate-400 mb-2">
+                  Access Code
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(event) => setCouponCode(event.target.value)}
+                    placeholder="Enter free or discount code"
+                    className="flex-1 rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="rounded-md border border-indigo-500/40 bg-indigo-500/20 px-4 text-xs uppercase tracking-widest text-indigo-100 hover:bg-indigo-500/30"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {couponPercent >= 100 && (
+                  <div className="mt-3 space-y-3">
+                    <input
+                      type="email"
+                      value={couponEmail}
+                      onChange={(event) => setCouponEmail(event.target.value)}
+                      placeholder="Email (needed to restore access later)"
+                      className="w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRedeemCoupon}
+                      disabled={isRedeeming}
+                      className="w-full rounded-md border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-xs uppercase tracking-widest text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-60"
+                    >
+                      {isRedeeming ? 'Unlocking...' : 'Unlock with coupon'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {couponPercent < 100 && (
+                <div className="mb-6">
+                  <div id="paypal-button-container" className="[&>div]:first-child:rounded-lg"></div>
+                </div>
+              )}
+
+              {(error || configError || couponError) && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
+                  <p className="text-red-300 text-sm text-center">{error || configError || couponError}</p>
+                </div>
+              )}
+
+              {isProcessing && (
+                <div className="text-center text-indigo-300 text-sm">
+                  <div className="inline-flex items-center gap-2">
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
+                    Processing your payment...
+                  </div>
+                </div>
+              )}
+
+              <p className="text-slate-500 text-xs text-center mt-8">
+                Secure payment powered by PayPal. Your information is encrypted and protected.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

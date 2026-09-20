@@ -8,6 +8,7 @@ body,
   width: 100%;
   min-height: 100%;
   margin: 0;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -28,4 +29,37 @@ h3 {
 
 a {
   color: inherit;
+}
+
+.omshanti-step-shell > main {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 4.5rem);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 7rem);
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .omshanti-step-shell > main {
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 5.2rem);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8.5rem);
+  }
+
+  .omshanti-media-sidebar {
+    top: auto !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 4.9rem) !important;
+    left: 0.55rem !important;
+    transform: none !important;
+    max-height: 42vh !important;
+  }
+
+  .omshanti-global-player {
+    left: 0.55rem !important;
+    right: 0.55rem !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 0.65rem) !important;
+  }
+
+  .omshanti-global-player > div {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
